@@ -42,6 +42,8 @@
 typedef enum {force,gracefully} ATP_END;
 // 워크 쓰레드의 현재 상태
 typedef enum { stat_suspend, stat_run, stat_exit = 9, stat_exited } ATP_STAT;
+// 워크 쓰레드의 작업우선순위
+typedef enum { atp_realtime, atp_normal } ATP_PRIORITY;
 
 struct ATP_DATA_T; // ThreadFunction 선언시 사용할 수 있는 포인터만 선언..
 
@@ -74,12 +76,12 @@ typedef struct _THREADINFO
 	struct timespec waittime;		// 각 쓰레드 마다 스스로 깨어날 시간을 지정한다 (default 3초)
 
 	// thread function
-	ThreadFunction	atp_run_func;		// 상태가 stat_run인 경우 실행할 함수. atp_create() 로 설정
-	PATP_DATA		atp_run_data;		// 상태가 stat_run인 경우 실행할 정보(함수 처리완료 후 free()). atp_addQueue() 로 설정
-	ThreadFunction	atp_suspend_func;	// 상태가 stat_suspend 인 경우 실행할 함수. atp_setfunc() 로 설정
-	PATP_DATA		atp_suspend_data;	// 상태가 stat_suspend 인 경우 실행할 정보( 쓰레드 종료할 때 free() ). atp_setfunc() 로 설정
-	ThreadFunction	atp_exit_func;		// 상태가 stat_exit 인 경우 실행할 함수. atp_setfunc() 로 설정
-	PATP_DATA		atp_exit_data;		// 상태가 stat_exit 인 경우 실행할 정보( 쓰레드 종료할 때 free() ). atp_setfunc() 로 설정
+	ThreadFunction	atp_realtime_func;	// 실시간 수행 잡을 처리할 함수
+	ThreadFunction	atp_normal_func;	// 낮은 순위의 잡을 처라할 함수(대부분 atp_realtime_func 와 같은 함수일 가능성이 크다)
+	ThreadFunction	atp_idle_func;		// 쉬고 있을 때 수행 할일
+	PATP_DATA		atp_idle_data;		// 쉬고있을 대 수행잡이 참고할 데이타 구조
+	ThreadFunction	atp_exit_func;		// 메인쓰레드가 설정한 상태가 stat_exit 인 경우 실행할 함수. atp_setfunc() 로 설정
+	PATP_DATA		atp_exit_data;		// 메인쓰레드가 설정한 상태가 상태가 stat_exit 인 경우 실행할 정보( 쓰레드 종료할 때 free()한다. atp_setfunc() 로 설정)
 
 	// 외부연결이 필요한 경우 (예약)
 	bool			keepsession;	// tcp 경우 세전유지가 필요한가?
@@ -95,11 +97,11 @@ typedef struct _THREADINFO
 } THREADINFO, *PTHREADINFO;
 
 // AsyncThreadPool 을 이용하는 기본적인 함수들
-int atp_create(int nThreadCount, ThreadFunction _func, pthread_attr_t* stAttr=NULL);
+int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal=NULL, pthread_attr_t* stAttr=NULL);
 int atp_destroy(ATP_END endcode, bool use_exit_func=false);
 	
 // atp_addQueue() 는 정상 작동하면 0 을 리턴한다. 큐를 추가하지 못했으면 -1 을 리턴한다
-int atp_addQueue(PATP_DATA atp);
+int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority=atp_realtime);
 
 // 메인쓰레드가 일을 주지 않으면 각 워크 쓰레드는 지정된 시간이 경과하면 스스로 깨어난다
 bool atp_setwaittime(struct timespec _w, int _n = -1);
@@ -113,7 +115,8 @@ bool atp_setfunc(ATP_STAT _s, ThreadFunction _f, PATP_DATA _d, int _n = -1 );
 // AsyncThreadPool 의 간단한 정보 조회
 int atp_getThreadCount(); // 쓰레드풀의 갯수를 리턴한다
 PTHREADINFO atp_getThreadInfo(); // 쓰레드풀 테이블 메모리 위치를 리턴한다
-int atp_getQueueCount(); // 큐 갯수를 리턴한다
+int atp_getRealtimeQueueCount(); // 실시간작업의뢰 큐 갯수를 리턴한다
+int atp_getNormalQueueCount(); // 여유시간작업의뢰 큐 갯수를 리턴한다
 
 // mutex 관련
 inline int atp_worklock();		// 작업쓰레드간에 동기화를 위한 락이 필요한 경우

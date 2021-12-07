@@ -4,59 +4,67 @@
 using namespace std;
 
 // 선언과 함께 초기화 { PTHREAD_MUTEX_INITIALIZER or pthread_mutex_init(&mutex,NULL); }
-pthread_mutex_t mutexThread;	// 잡업큐 관리용 뮤텍스 
 pthread_mutex_t	hMutex;			// 관리쓰레드와 워크쓰레드간의 시그널 동기화용 뮤텍스
 pthread_mutex_t	mutexWork;		// 워크쓰레드들 사이에 동기화가 필요한 경우 사용하기 위한 뮤텍스
 pthread_cond_t	hEvent;			// 쓰레드 깨움 이벤트시그널
 
 // 상태 플러그
 static int g_mainThread_run = 0; // 0으로 설정하면 관리 쓰레드 종료한다
-static int g_mainThread_use_exit_func = 0; // 1로 설정하면 모든 워크 쓰레드에 atp_exit_func 를 호출하고 종료하게 한다
 static int g_workThread_run = 0; // 0으로 설정하면 work 쓰레드 종료한다
+static int g_mainThread_use_exit_func = 0; // 1로 설정하면 모든 워크 쓰레드에 atp_exit_func 를 호출하고 종료하게 한다
 
-// 워크 쓰레드관리 테이블
-PTHREADINFO g_thread = NULL;
+PTHREADINFO g_thread = NULL;	// 워크 쓰레드관리 테이블 포인트
 static int g_nThreadCount = 0;
-pthread_t g_MainThreadID;
+pthread_t g_MainThreadID;	// 관리쓰레드 아이덴티파이어
 
-queue<PATP_DATA> g_work;
+queue<PATP_DATA> g_queueRealtime;
+queue<PATP_DATA> g_queueNormal;
+
+PATP_DATA g_nextRealtime = NULL; // 워크쓰레드가 깨어나서 할 일 최우선순위
+PATP_DATA g_nextNormal = NULL; // 워크쓰레드가 깨어나서 할 일 g_nextRealtime 비었을 때 실행
 
 // ------------ function -----------------
 
 void* mainthread(void* param)
 {
 	int i;
-	bool bProcessed;
+	bool bRequested;
 	while (g_mainThread_run) {
-		if (g_work.size()) { // if (큐가 있으면)
-			bProcessed = false;
-			// 작업중일 때는 atp_addQueue() 추가 안한다
-			if (!pthread_mutex_lock(&mutexThread)) {
-				// 시그널 보내기 전에 반드시 락을 건다... 걍 하면 이미 쓰레드가 실행 중 일 수 있다
-				if (!pthread_mutex_lock(&hMutex)) {
-					for (i = 0; i < g_nThreadCount; i++) {
-						// 잠자는 쓰레드가 있으면
-						if (g_thread[i].nThreadStat == stat_suspend) {
-							// 쓰레드 상태를 stat_run으로 변경하고 쓰레드를 깨우고 break
-							// 없으면 다음 타임으로 자동 패스...
-							g_thread[i].nThreadStat = stat_run;
-							g_thread[i].atp_run_data = g_work.front();
-							g_work.pop();
-							pthread_cond_signal(&hEvent);
-							bProcessed = true;
-							TRACE("mainthread. run with workethread no(%d)\n", i);
-							break;
-						}
-					}
-					pthread_mutex_unlock(&hMutex);
+		if (g_queueRealtime.size() || g_queueNormal.size()) { // if (큐가 있으면)
+			bRequested = false;
+			// 시그널 보내기 전에 반드시 락을 건다...
+			if (!pthread_mutex_lock(&hMutex)) {
+
+				if (!g_nextNormal && g_queueNormal.size()) {
+					g_nextNormal = g_queueNormal.front();
+					g_queueNormal.pop();
+					// 요건 시그널 안보낸다... 워크쓰레드 웨잇타임아웃 때 실행한다
+					TRACE("mainthread. request a normal job\n");
 				}
-				// 뮤텍스 언락
-				pthread_mutex_unlock(&mutexThread);
-				// 처리했다면 (그러나 아직 큐에 자료가 남았을 수 있다) 바로 다음 작업 시키자
-				// 처리하지 못했다면 노는 쓰레드가 없다. 좀 쉬었다가 다음 처리하자
-				if (bProcessed)
-					continue;
+				
+				if (g_queueRealtime.size()) {
+					if (!g_nextRealtime) {
+						g_nextRealtime = g_queueRealtime.front();
+						g_queueRealtime.pop();
+						bRequested = true;
+					}
+				}
+
+				if (g_nextRealtime) {
+					// 앞전에 시그널를 보냈는데 쉬는 쓰레드가 없었다면 이리 다시 온다... 다시 시그널을 보내자
+					pthread_cond_signal(&hEvent);
+					if (bRequested) {
+						TRACE("mainthread. request a realtime job\n");
+					} else {
+						TRACE("mainthread. retry request a realtime job\n");
+					}
+				}
+				pthread_mutex_unlock(&hMutex);
 			}
+			// 처리했다면 (그러나 아직 큐에 자료가 남았을 수 있다) 바로 다음 작업 시키자
+			// 처리하지 못했다면 노는 쓰레드가 없다. 좀 쉬었다가 다음 처리하자
+			if (bRequested)
+				continue;
 		}
 		// 큐에들어온 자료확인은 좀 천천히 하자 cpu 많이 먹네...
 		usleep(100000);// 100,000 마이크로초 => 100밀리초 => // 마이크로초 (백만분의1초 10의 -6승)
@@ -151,8 +159,10 @@ void* mainthread(void* param)
 	if (g_thread) {
 		// workthread memory free
 		for (i = 0; i < g_nThreadCount; i++) {
-			if (g_thread[i].atp_exit_data) free(g_thread[i].atp_exit_data);
-			if (g_thread[i].atp_suspend_data) free(g_thread[i].atp_suspend_data);
+			if (g_thread[i].atp_exit_data)
+				free(g_thread[i].atp_exit_data);
+			if (g_thread[i].atp_idle_data)
+				free(g_thread[i].atp_idle_data);			
 		}
 		// table memory free
 		free(g_thread);
@@ -176,19 +186,17 @@ void* workthread(void* param)
 
 	while (g_workThread_run) {
 
-		pthread_mutex_lock(&hMutex);
 
 		nStat = 0;
 
 		// pthread_cond_wait() 은 락걸린 뮤텍스를 언락하고 웨이팅이 들어간다
 		// 시그날이 들어오면 자기가 깨어날 때 뮤텍스를 락걸고 나온다
-		// 깨어나면 락을 자기가 가지고 있으므로 먼저 락을 풀어주고 작업을 해야한다
-		// 그래아지 다른 쓰레드가 시그널에서 깨어날 때 기다리지 않고 바로 락을 가지고 나온다.
+		// 깨어나면 락을 자기가 가지고 있으므로 락을 가지고 할일만 하고 락을 풀어 주어야 해야한다
 		if (me->nThreadStat < stat_exit) {
+			pthread_mutex_lock(&hMutex);
 			gettimeofday(&timenow, NULL);
 			waittime.tv_sec = timenow.tv_sec + me->waittime.tv_sec;
 			waittime.tv_nsec = timenow.tv_usec + me->waittime.tv_nsec;
-
 			nStat = pthread_cond_timedwait(&hEvent, &hMutex, &waittime);
 		}
 
@@ -199,11 +207,11 @@ void* workthread(void* param)
 			// EBUSY : 16	/* Device or resource busy */
 			if (errno == EBUSY)
 			{
-				TRACE("workthread no(%d), was timedwait() timeout, errno=%d\n", me->nThreadNo, errno);
+				TRACE("workthread no(%d), timedwait() EBUSY, errno=%d\n", me->nThreadNo, errno);
 			} else if (errno == EINVAL) {
-				TRACE("workthread no(%d), was timedwait() error, errno=%d\n", me->nThreadNo, errno);
+				TRACE("workthread no(%d), timedwait() EINVAL, errno=%d\n", me->nThreadNo, errno);
 			} else {
-				TRACE("workthread no(%d), was timedwait() error, errno=%d\n", me->nThreadNo, errno);
+				TRACE("workthread no(%d), timedwait() error, errno=%d\n", me->nThreadNo, errno);
 				usleep(10000);// 10,000 마이크로초 => 10밀리초 => // 마이크로초 (백만분의1초 10의 -6승)
 			}
 
@@ -233,49 +241,60 @@ void* workthread(void* param)
 			break; /// exit from work loop
 
 		}
-		
-		if (me->nThreadStat == stat_run) {
-			pthread_mutex_unlock(&hMutex);
+
+
+		if (g_nextRealtime) {
+			PATP_DATA job_data = g_nextRealtime;
+			g_nextRealtime = NULL;		// 비워주어야 관리쓰레드가 다음 작업을 의뢰한다
+			me->nThreadStat = stat_run;
+			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
 			me->nExecuteCount++;
-			TRACE("workthread no(%d), I got a job. excuted: %lu\n", me->nThreadNo, me->nExecuteCount);
+			TRACE("workthread no(%d), I got a realtime job. excuted: %lu\n", me->nThreadNo, me->nExecuteCount);
 
 			ATP_STAT next = stat_suspend;
 
-			if (me->atp_run_func)
-				next = me->atp_run_func(me->atp_run_data);
+			if (me->atp_realtime_func)
+				next = me->atp_realtime_func(job_data);
 			// me->atp_run_data 는 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
-			if (me->atp_run_data)
-				free(me->atp_run_data);
-			me->atp_run_data = NULL;
+				free(job_data);
 
-			TRACE("workthread no(%d), I finished a job. excuted: %lu, next: %d\n", me->nThreadNo, me->nExecuteCount, next);
+			TRACE("workthread no(%d), I finished a realtime job. excuted: %lu, next: %d\n", me->nThreadNo, me->nExecuteCount, next);
 
 			me->nThreadStat = next;
 
-			continue;
+		} else if (g_nextNormal) {
+			PATP_DATA job_data = g_nextNormal;
+			g_nextNormal = NULL;		// 비워주어야 관리쓰레드가 다음 작업을 의뢰한다
+			me->nThreadStat = stat_run;
+			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
-		} 
-		
-		if (me->nThreadStat == stat_suspend) {
-			pthread_mutex_unlock(&hMutex);
+			// 실행명령 전달받음
+			me->nExecuteCount++;
+			TRACE("workthread no(%d), I got a normal job. excuted: %lu\n", me->nThreadNo, me->nExecuteCount);
 
-			//TRACE("workthread no(%d), stat=%d\n", me->nThreadNo, me->nThreadStat);
 			ATP_STAT next = stat_suspend;
-			if (me->atp_suspend_func)
-				next = me->atp_suspend_func(me->atp_suspend_data);
-			//TRACE("workthread no(%d), I finished a stat_suspend. next =%d\n", me->nThreadNo, next);
+
+			if (me->atp_normal_func)
+				next = me->atp_normal_func(job_data);
+			// me->atp_run_data 는 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
+			free(job_data);
+
+			TRACE("workthread no(%d), I finished a normal job. excuted: %lu, next: %d\n", me->nThreadNo, me->nExecuteCount, next);
 
 			me->nThreadStat = next;
-
 		} else {
+			me->nThreadStat = stat_run;
 			pthread_mutex_unlock(&hMutex);
 
-			// 지정되지 않은 상태코드 발생.....
-			// 사용자 함수에서 리턴값 제대로 설정하지 않으면 이리올 수 있다.
-			printf("%s:%d 상태코드 확인바람 오류발생여지 있음...\n", __FILE__, __LINE__);
-			me->nThreadStat = stat_suspend;
+			ATP_STAT next = stat_suspend;
+			if (me->atp_idle_func) {
+				TRACE("workthread no(%d), I start idle job\n", me->nThreadNo);
+				next = me->atp_idle_func(me->atp_idle_data);
+				TRACE("workthread no(%d), I finished a idle job. next =%d\n", me->nThreadNo, next);
+			}
+			me->nThreadStat = next;
 		}
 	}
 
@@ -285,10 +304,10 @@ void* workthread(void* param)
 	pthread_exit(0);
 }
 
-int atp_create(int nThreadCount, ThreadFunction _func, pthread_attr_t* stAttr)
+int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal, pthread_attr_t* stAttr)
 {
 	g_nThreadCount = nThreadCount;
-	pthread_mutex_init(&mutexThread, NULL);
+	//pthread_mutex_init(&mutexThread, NULL);
 	pthread_mutex_init(&mutexWork, NULL);
 	pthread_mutex_init(&hMutex, NULL);
 	pthread_cond_init(&hEvent, NULL);
@@ -300,12 +319,15 @@ int atp_create(int nThreadCount, ThreadFunction _func, pthread_attr_t* stAttr)
 	g_mainThread_run = 1;
 	g_workThread_run = 1;
 	g_mainThread_use_exit_func = 0;
+	g_nextRealtime = NULL;
+	g_nextNormal = NULL;
 
 	// 워크쓰레드 생성
 	for (int i = 0; i < g_nThreadCount; i++) {
 		g_thread[i].nThreadNo = i;
 		g_thread[i].nThreadStat = stat_suspend;
-		g_thread[i].atp_run_func = _func;
+		g_thread[i].atp_realtime_func = realtime;
+		g_thread[i].atp_normal_func = normal ? normal : realtime;	// 같은 함수를 호출할 가능성이 많다
 		g_thread[i].waittime.tv_sec = 3; // default 3 second
 		g_thread[i].waittime.tv_nsec = 0; // default 0 nano second
 		pthread_create(&g_thread[i].threadID, stAttr, workthread, &g_thread[i]);
@@ -326,13 +348,13 @@ int atp_destroy(ATP_END endcode, bool use_exit_func)
 
 	if (endcode == gracefully) {
 		TRACE("=== %s() gracefully thread pool down check\n", __func__);
-		while (g_work.size()) {
-			TRACE("=== %s() queue check , queue size=%d\n", __func__, (int)g_work.size());
+		while (g_queueRealtime.size() || g_queueNormal.size()) {
+			TRACE("=== %s() queue check , queue size=%d,%d\n", __func__, (int)g_queueRealtime.size(), (int)g_queueNormal.size());
 			usleep(100000);
 		}
 	} else {
-		if (g_work.size()) {
-			TRACE("=== %s() queue size=%d, but force down now\n", __func__, (int)g_work.size());
+		if (g_queueRealtime.size() || g_queueNormal.size()) {
+			TRACE("=== %s() queue size=%d,%d, but force down now\n", __func__, (int)g_queueRealtime.size(), (int)g_queueNormal.size());
 		}
 	}
 
@@ -346,27 +368,22 @@ int atp_destroy(ATP_END endcode, bool use_exit_func)
 	pthread_cond_destroy(&hEvent);
 	pthread_mutex_destroy(&hMutex);
 	pthread_mutex_destroy(&mutexWork);
-	pthread_mutex_destroy(&mutexThread);
-
+	
 	TRACE("=== %s() terminated now\n", __func__);
 
 	return 0;
 }
 
-int atp_addQueue(PATP_DATA atp)
+int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority)
 {
 	if (!g_mainThread_run)
 		return -1;
 
-	// lock
-	if (pthread_mutex_lock(&mutexThread))
-		return -1;
-
 	// add queue
-	g_work.push(atp);
-
-	// unlock
-	pthread_mutex_unlock(&mutexThread);
+	if(priority==atp_realtime)
+		g_queueRealtime.push(atp);
+	else
+		g_queueNormal.push(atp);
 
 	return 0;
 }
@@ -381,9 +398,14 @@ int atp_getThreadCount()
 	return g_nThreadCount;
 }
 
-int atp_getQueueCount()
+int atp_getRealtimeQueueCount()
 {
-	return g_work.size();
+	return g_queueRealtime.size();
+}
+
+int atp_getNormalQueueCount()
+{
+	return g_queueNormal.size();
 }
 
 bool atp_setwaittime(struct timespec _w, int _n)
@@ -423,10 +445,10 @@ bool atp_setfunc(ATP_STAT _s, ThreadFunction _f, PATP_DATA _d, int _n)
 	while (nStart < nEnd) {
 		switch (_s) {
 		case stat_suspend:
-			if (g_thread[nStart].atp_suspend_data)
-				free(g_thread[nStart].atp_suspend_data);
-			g_thread[nStart].atp_suspend_func = _f;
-			g_thread[nStart].atp_suspend_data = _d;
+			if (g_thread[nStart].atp_idle_data)
+				free(g_thread[nStart].atp_idle_data);
+			g_thread[nStart].atp_idle_func = _f;
+			g_thread[nStart].atp_idle_data = _d;
 			break;
 		case stat_exit:
 			if (g_thread[nStart].atp_exit_data)

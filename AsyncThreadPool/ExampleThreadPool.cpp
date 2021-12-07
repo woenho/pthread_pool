@@ -91,7 +91,7 @@ int main(int argc, char* argv[])
 
 	PTHREADINFO pThread = atp_getThreadInfo();
 	TRACE("--- request thread end...\n");
-	TRACE("--- thread queue_size(%d)\n", atp_getQueueCount());
+	TRACE("--- thread realtime queue_size(%d), normal queue_size(%d)\n", atp_getRealtimeQueueCount(), atp_getNormalQueueCount());
 	TRACE("-------------------------------------------\n");
 	for (nIndx = 0; nIndx < atp_getThreadCount(); nIndx++) {
 		TRACE("--- thread no=%d, executed=%lu\n", pThread[nIndx].nThreadNo, pThread[nIndx].nExecuteCount);
