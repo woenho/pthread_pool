@@ -42,12 +42,13 @@ ExampleThreadPool.cpp 라는 예제 프로그램을 이용하여 라이브러리
 2. atp_destroy(): 쓰레드 풀을 종료한다
 3. atp_addQueue(): 쓰레드 풀에 작업을 의뢰한다
 4. atp_setwaittime(): 쓰레드가 스스로 깨어나는 시간을 설정한다 (default 3 sec)
-5. atp_setfunc(): 쓰레드 종료시 처리하고 호출하고 싶은 사용자함수, 쓰레드가 스스로 깨어났을 때 호출하고 싶은 사용자함수를 설정한다
+5. atp_setfunc(): 쓰레드 종료시 처리하고 호출하고 싶은 사용자함수, 쓰레드가 Idle time 일 때 호출하고 싶은 사용자함수를 설정한다
 6. atp_worklock(): 사용자 함수간에 락이 필요한 경우 호출
 7. atp_workunlock(): atp_worklock()를 호출 한 경우 반드시 락을 해제 한다
 8. atp_getThreadCount(): atp_create() 호출시 지정한 워크 쓰레드 숫자를 가져온다
 9. atp_getThreadInfo(): 워크쓰레드목록을 가져온다
-10. atp_getQueueCount(): atp_addQueue()로 요청한 작업 목록 중 아직 워크쓰레드에 작업의뢰를 하지 못한 작업목록 수를 조회한다.
+10. atp_getRealtimeQueueCount(): atp_addQueue()로 요청한 작업 목록 중 아직 워크쓰레드에 작업의뢰를 하지 못한 realtime 우선순위의 작업목록 수를 조회한다.
+10. atp_getNormalQueueCount(): atp_addQueue()로 요청한 작업 목록 중 아직 워크쓰레드에 작업의뢰를 하지 못한 normal 우선순위의 작업목록 수를 조회한다.
 11. atp_alloc(): atp_addQueue() 함수로 작업을 의뢰할때 사용되는 인자는 반드시 이 함수를 사용하여 메모리를 생성한 후 사용하도록 한다. 메모리 해제는 라이브러리가 자동으로 수행한다.
 
 enum 변수 설명:

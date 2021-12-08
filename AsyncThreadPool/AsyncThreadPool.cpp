@@ -35,29 +35,27 @@ void* mainthread(void* param)
 			// 시그널 보내기 전에 반드시 락을 건다...
 			if (!pthread_mutex_lock(&hMutex)) {
 
-				if (!g_nextNormal && g_queueNormal.size()) {
-					g_nextNormal = g_queueNormal.front();
-					g_queueNormal.pop();
-					// 요건 시그널 안보낸다... 워크쓰레드 웨잇타임아웃 때 실행한다
-					TRACE("mainthread. request a normal job\n");
-				}
-				
 				if (g_queueRealtime.size()) {
 					if (!g_nextRealtime) {
 						g_nextRealtime = g_queueRealtime.front();
 						g_queueRealtime.pop();
 						bRequested = true;
+						TRACE("mainthread. request a realtime job\n");
+					}
+				} else {
+					// 리얼타임 우선순위의 잡이 없다면
+					if (!g_nextNormal && g_queueNormal.size()) {
+						g_nextNormal = g_queueNormal.front();
+						g_queueNormal.pop();
+						bRequested = true;
+						TRACE("mainthread. request a normal job\n");
 					}
 				}
 
-				if (g_nextRealtime) {
+				if (g_nextRealtime|| g_nextNormal) {
 					// 앞전에 시그널를 보냈는데 쉬는 쓰레드가 없었다면 이리 다시 온다... 다시 시그널을 보내자
 					pthread_cond_signal(&hEvent);
-					if (bRequested) {
-						TRACE("mainthread. request a realtime job\n");
-					} else {
-						TRACE("mainthread. retry request a realtime job\n");
-					}
+					TRACE("mainthread. retry request a job\n");
 				}
 				pthread_mutex_unlock(&hMutex);
 			}
@@ -66,9 +64,13 @@ void* mainthread(void* param)
 			if (bRequested)
 				continue;
 		}
-		// 큐에들어온 자료확인은 좀 천천히 하자 cpu 많이 먹네...
+		// 큐에들어온 자료확인은 좀 천천히 하자 cpu 많이 먹네...1초에 10번만
 		usleep(100000);// 100,000 마이크로초 => 100밀리초 => // 마이크로초 (백만분의1초 10의 -6승)
 	}
+
+	// 만일 아직 남은 잡이 있다면 모든 쓰레드가 깨어난 남은 잡을 가져가 실행 하고
+	// 아니면 stat_exit 상태에 다른 작업을 모든 쓰레드가 수행해야 한다
+	pthread_cond_broadcast(&hEvent);
 
 	int nCheck;
 	int nTryCount;
@@ -77,12 +79,12 @@ void* mainthread(void* param)
 		TRACE("=== set exit signal to all workthread\n");
 		nTryCount = 0;
 		do {
-			// 모든 뭐크쓰레드의 상태를 stat_exit 로 설정하는것을 10회 시도한다. 최대 5초간 시도
+			// 모든 워크쓰레드의 상태를 stat_exit 로 설정하는것을 10회 시도한다. 최대 5초간 시도
 			if (++nTryCount > 10) {
 				break;
 			}
 			else {
-				usleep(500000);
+				usleep(500000); // 0.5 second 
 			}
 			// TRACE("Try to set thread exit! Try Count(%d)\n", nTryCount);
 
@@ -90,15 +92,20 @@ void* mainthread(void* param)
 			nCheck = 0;
 			// 시그널 보내기 전에 반드시 락을 건다... 걍 하면 이미 쓰레드가 실행 중 일 수 있다
 			if (!pthread_mutex_lock(&hMutex)) {
-				for (i = 0; i < g_nThreadCount; i++) {
-					if (g_thread[i].nThreadStat < stat_run) {
-						g_thread[i].nThreadStat = stat_exit;
-						TRACE("=== thread no(%d), set to stat_exit signal\n", g_thread[i].nThreadNo);
-						pthread_cond_signal(&hEvent);
-					} else if (g_thread[i].nThreadStat >= stat_exit){
-						nCheck++;
+				if (!g_nextNormal && !g_nextRealtime) {
+					for (i = 0; i < g_nThreadCount; i++) {
+						if (g_thread[i].nThreadStat < stat_run) {
+							g_thread[i].nThreadStat = stat_exit;
+							TRACE("=== thread no(%d), set to stat_exit signal\n", g_thread[i].nThreadNo);
+						}
+						else if (g_thread[i].nThreadStat >= stat_exit) {
+							nCheck++;
+						}
 					}
 				}
+				// 만일 아직 남은 잡이 있다면 모든 쓰레드가 개어난 남은 잡을 가져가 실행 하고
+				// 아니면 stat_exit 상태에 다른 작업을 모든 쓰레드가 수행해야 한다
+				pthread_cond_broadcast(&hEvent);
 				pthread_mutex_unlock(&hMutex);
 			}
 		} while (nCheck < g_nThreadCount);
@@ -258,7 +265,7 @@ void* workthread(void* param)
 			if (me->atp_realtime_func)
 				next = me->atp_realtime_func(job_data);
 			// me->atp_run_data 는 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
-				free(job_data);
+			free(job_data);
 
 			TRACE("workthread no(%d), I finished a realtime job. excuted: %lu, next: %d\n", me->nThreadNo, me->nExecuteCount, next);
 
@@ -272,7 +279,7 @@ void* workthread(void* param)
 
 			// 실행명령 전달받음
 			me->nExecuteCount++;
-			TRACE("workthread no(%d), I got a normal job. excuted: %lu\n", me->nThreadNo, me->nExecuteCount);
+			TRACE("workthread no(%d), I got a normal job. (real queue size = %d, normal = %d)\n", me->nThreadNo, g_queueRealtime.size(), g_queueNormal.size());
 
 			ATP_STAT next = stat_suspend;
 
@@ -281,7 +288,7 @@ void* workthread(void* param)
 			// me->atp_run_data 는 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
 			free(job_data);
 
-			TRACE("workthread no(%d), I finished a normal job. excuted: %lu, next: %d\n", me->nThreadNo, me->nExecuteCount, next);
+			TRACE("workthread no(%d), I finished a normal job.\n", me->nThreadNo);
 
 			me->nThreadStat = next;
 		} else {
@@ -307,7 +314,6 @@ void* workthread(void* param)
 int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal, pthread_attr_t* stAttr)
 {
 	g_nThreadCount = nThreadCount;
-	//pthread_mutex_init(&mutexThread, NULL);
 	pthread_mutex_init(&mutexWork, NULL);
 	pthread_mutex_init(&hMutex, NULL);
 	pthread_cond_init(&hEvent, NULL);
@@ -348,7 +354,7 @@ int atp_destroy(ATP_END endcode, bool use_exit_func)
 
 	if (endcode == gracefully) {
 		TRACE("=== %s() gracefully thread pool down check\n", __func__);
-		while (g_queueRealtime.size() || g_queueNormal.size()) {
+		while (g_nextRealtime || g_nextNormal || g_queueRealtime.size() || g_queueNormal.size()) {
 			TRACE("=== %s() queue check , queue size=%d,%d\n", __func__, (int)g_queueRealtime.size(), (int)g_queueNormal.size());
 			usleep(100000);
 		}

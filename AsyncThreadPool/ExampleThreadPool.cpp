@@ -5,24 +5,32 @@
 
 ATP_STAT sub1(PATP_DATA data)
 {
-	TRACE(" %s func, data is (%s)\n", __func__, data->s ? data->s : "");
-	sleep(1);
+	TRACE("--------------- %s func, data is (%s)\n", __func__, data->s ? data->s : "");
+	usleep(500000); // 0.5 second
 
 	return stat_suspend;
 }
 
 ATP_STAT sub2(PATP_DATA data)
 {
-	TRACE(" %s func, data is (%s)\n", __func__, data->s ? data->s : "");
-	sleep(2);
+	TRACE("--------------- %s func, data is (%s)\n", __func__, data->s ? data->s : "");
+	sleep(1); // 1 second
+
+	return stat_suspend;
+}
+
+ATP_STAT sub3(PATP_DATA data)
+{
+	TRACE("--------------- %s func, data is (%s)\n", __func__, data->s ? data->s : "");
+	sleep(2); // 2 second
 
 	return stat_suspend;
 }
 
 ATP_STAT sub9(PATP_DATA data)
 {
-	TRACE(" %s func, data is (%s)\n", __func__, data->s ? data->s : "");
-	sleep(200000);
+	TRACE("--------------- %s func, msg is (%s)\n", __func__, data->s ? data->s : "");
+	sleep(90);
 
 	return stat_suspend;
 }
@@ -32,7 +40,7 @@ ATP_STAT test(PATP_DATA param)
 	if (param->func)
 		return param->func(param);
 	else
-		TRACE(" %s func, data is (%s)\n", __FUNCTION__, param->s  ? param->s : "");
+		TRACE(" %s func, message is (%s)\n", __FUNCTION__, param->s  ? param->s : "");
 
 	return stat_suspend;
 }
@@ -52,42 +60,63 @@ int main(int argc, char* argv[])
 
 	size_t data_size = 1024;
 	PATP_DATA atpdata;
-	int nIndx;
+	int nIndx, next;
 
 	atp_create(3, test);
+	srand(1);
 
-	for (nIndx = 0; nIndx < 11; nIndx++) {
+	for (nIndx = 0; nIndx < 15; nIndx++) {
 
 		// atpdata 는 쓰레딩 작업후에 자동으로 free 된다
 		atpdata = atp_alloc(data_size);
 		
-		snprintf(atpdata->s, atpdata->s_len, "loop no (%d)", nIndx);
+		snprintf(atpdata->s, atpdata->s_len, "job seq (%d)", nIndx);
 
-		if (nIndx < 10) {
-			if (nIndx % 2)
-				atpdata->func = sub1;
-			else
-				atpdata->func = sub2;
-		} else {
-			// 인덱스 10 부터는 서브호출 없음
-		}
+		next = nIndx % 3;
 
-		if (!atp_addQueue(atpdata)) {
-			TRACE("--- thread add Queue successed %d \n", nIndx);
-		} else {
-			free(atpdata);
-			TRACE("--- thread add Queue failed %d \n", nIndx);
+		switch (next) {
+		case 0:
+			atpdata->func = sub1;
+			if (!atp_addQueue(atpdata)) {
+				TRACE("--------------- thread add real Queue successed %d \n", nIndx);
+			} else {
+				free(atpdata);
+				TRACE("--------------- thread add real Queue failed %d \n", nIndx);
+			}
+			break;
+		case 1:
+			atpdata->func = sub2;
+			if (!atp_addQueue(atpdata)) {
+				TRACE("--------------- thread add real Queue successed %d \n", nIndx);
+			}
+			else {
+				free(atpdata);
+				TRACE("--------------- thread add real Queue failed %d \n", nIndx);
+			}
+			break;
+		default:
+			atpdata->func = sub3;
+			if (!atp_addQueue(atpdata,atp_normal)) {
+				TRACE("--------------- thread add normal Queue successed %d \n", nIndx);
+			}
+			else {
+				free(atpdata);
+				TRACE("--------------- thread add normal Queue failed %d \n", nIndx);
+			}
 		}
+		// realtime 우선순위의 다 처리하면 중간중간 normal 우선순의를 실행할 수 있도록 시간 맞추기 힘들군...
+		next = rand() % 600;
+		usleep(next*1000); // 작업의뢰를 램덤한 간격으로 한다 ( 0 ~ 0.6초)
 	}
 
 	// 강제 킬 목적으로 sub9 할당
 	atpdata = atp_alloc(data_size);
-	snprintf(atpdata->s, atpdata->s_len, "loop no (XXX)");
+	snprintf(atpdata->s, atpdata->s_len, "wait process.. kill me (XXX)");
 	atpdata->func = sub9;
 	atp_addQueue(atpdata);
 
 
-	sleep(4);
+	//sleep(2);
 
 	PTHREADINFO pThread = atp_getThreadInfo();
 	TRACE("--- request thread end...\n");
