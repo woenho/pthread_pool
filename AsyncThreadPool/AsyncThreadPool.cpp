@@ -55,7 +55,7 @@ void* mainthread(void* param)
 				if (g_nextRealtime|| g_nextNormal) {
 					// 앞전에 시그널를 보냈는데 쉬는 쓰레드가 없었다면 이리 다시 온다... 다시 시그널을 보내자
 					pthread_cond_signal(&hEvent);
-					TRACE("mainthread. retry request a job\n");
+					// TRACE("mainthread. retry request a job\n");
 				}
 				pthread_mutex_unlock(&hMutex);
 			}
@@ -262,9 +262,13 @@ void* workthread(void* param)
 
 			ATP_STAT next = stat_suspend;
 
+			if (job_data) {
+				job_data->priority = atp_realtime;
+				job_data->threadNo = me->nThreadNo;
+			}
 			if (me->atp_realtime_func)
 				next = me->atp_realtime_func(job_data);
-			// me->atp_run_data 는 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
+			// 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
 			free(job_data);
 
 			TRACE("workthread no(%d), I finished a realtime job. excuted: %lu, next: %d\n", me->nThreadNo, me->nExecuteCount, next);
@@ -279,13 +283,17 @@ void* workthread(void* param)
 
 			// 실행명령 전달받음
 			me->nExecuteCount++;
-			TRACE("workthread no(%d), I got a normal job. (real queue size = %d, normal = %d)\n", me->nThreadNo, g_queueRealtime.size(), g_queueNormal.size());
+			TRACE("workthread no(%d), I got a normal job. (real queue size = %lu, normal = %lu)\n"
+				, me->nThreadNo, g_queueRealtime.size(), g_queueNormal.size());
 
 			ATP_STAT next = stat_suspend;
-
+			if (job_data) {
+				job_data->priority = atp_normal;
+				job_data->threadNo = me->nThreadNo;
+			}
 			if (me->atp_normal_func)
 				next = me->atp_normal_func(job_data);
-			// me->atp_run_data 는 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
+			// 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
 			free(job_data);
 
 			TRACE("workthread no(%d), I finished a normal job.\n", me->nThreadNo);
@@ -386,10 +394,11 @@ int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority)
 		return -1;
 
 	// add queue
-	if(priority==atp_realtime)
-		g_queueRealtime.push(atp);
-	else
+	// default 가 atp_realtime 이므로 명시적 normal이 어느곳에서든 있으면 atp_normal로 처리
+	if(priority == atp_normal || atp->priority == atp_normal)
 		g_queueNormal.push(atp);
+	else
+		g_queueRealtime.push(atp);
 
 	return 0;
 }
@@ -455,12 +464,16 @@ bool atp_setfunc(ATP_STAT _s, ThreadFunction _f, PATP_DATA _d, int _n)
 				free(g_thread[nStart].atp_idle_data);
 			g_thread[nStart].atp_idle_func = _f;
 			g_thread[nStart].atp_idle_data = _d;
+			if(_d)
+				_d->threadNo = g_thread[nStart].nThreadNo;
 			break;
 		case stat_exit:
 			if (g_thread[nStart].atp_exit_data)
 				free(g_thread[nStart].atp_exit_data);
 			g_thread[nStart].atp_exit_func = _f;
 			g_thread[nStart].atp_exit_data = _d;
+			if (_d)
+				_d->threadNo = g_thread[nStart].nThreadNo;
 			break;
 		default:
 			return false;

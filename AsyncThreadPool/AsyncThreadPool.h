@@ -39,24 +39,24 @@
 #include <fstream>
 
 // 쓰레드풀의 종료 옵션
-typedef enum {force,gracefully} ATP_END;
+typedef enum {force=0,gracefully} ATP_END;
 // 워크 쓰레드의 현재 상태
-typedef enum { stat_suspend, stat_run, stat_exit = 9, stat_exited } ATP_STAT;
+typedef enum { stat_suspend=0, stat_run, stat_exit = 9, stat_exited } ATP_STAT;
 // 워크 쓰레드의 작업우선순위
-typedef enum { atp_realtime, atp_normal } ATP_PRIORITY;
+typedef enum { atp_realtime=0, atp_normal } ATP_PRIORITY;
 
 struct ATP_DATA_T; // ThreadFunction 선언시 사용할 수 있는 포인터만 선언..
 
 // 워크쓰레드가 호출할 사용자함수 형식
 typedef ATP_STAT(*ThreadFunction)(ATP_DATA_T*);
 
-// 워크쓰레드가 사용자함수를 호출할 때 인자로 넘겨주는 데이타형식
-typedef struct ATP_DATA_T { ThreadFunction func; int s_len; char s[]; } ATP_DATA, * PATP_DATA;
+// 워크쓰레드가 사용자함수를 호출할 때 인자로 넘겨주는 데이타형식, 사용자 함수에서 몇 번째 워크쓰레드에서 동작하는지 알 수 있게 쓰레드 번호 추가 
+typedef struct ATP_DATA_T { ThreadFunction func; ATP_PRIORITY priority; int threadNo, s_len; char s[]; } ATP_DATA, * PATP_DATA;
 
 // ATP_DATA 를 사용할 때 이 함수로 메모리를 생성한다. 삭제는 자료의성격에 따라서 자동으로 진행된다
 // stat_run으로 호출되는 함수가 상황에 따라 다른 함수를 호출 하고 싶으면 ATP_DATA::func 에 함수를 설정한다
 inline PATP_DATA atp_alloc(size_t data_size) {
-	size_t allocsize = data_size + sizeof(ATP_DATA::s_len) + sizeof(ATP_DATA_T::func);
+	size_t allocsize = data_size + sizeof(ATP_DATA) - sizeof(char); // sizeof(char) == ATP_DATA::s
 	PATP_DATA atp = (PATP_DATA)malloc(allocsize);
 	if (atp) { bzero(atp, allocsize); atp->s_len = data_size; }
 	return atp;
@@ -84,14 +84,14 @@ typedef struct _THREADINFO
 	PATP_DATA		atp_exit_data;		// 메인쓰레드가 설정한 상태가 상태가 stat_exit 인 경우 실행할 정보( 쓰레드 종료할 때 free()한다. atp_setfunc() 로 설정)
 
 	// 외부연결이 필요한 경우 (예약)
-	bool			keepsession;	// tcp 경우 세전유지가 필요한가?
+	bool			keepsession;	// tcp 경우 세션유지가 필요한가?
 	int				protocol;		// tcp or udp
 	char			host[64];
 	unsigned short	port;
 
 	// log info (예약)
-	time_t			tlog;
-	struct tm		lt;
+	time_t			logtime;
+	struct tm		logtm;
 	char			szThreadLog[1024];
 
 } THREADINFO, *PTHREADINFO;
@@ -119,14 +119,15 @@ int atp_getRealtimeQueueCount(); // 실시간작업의뢰 큐 갯수를 리턴�
 int atp_getNormalQueueCount(); // 여유시간작업의뢰 큐 갯수를 리턴한다
 
 // mutex 관련
-inline int atp_worklock();		// 작업쓰레드간에 동기화를 위한 락이 필요한 경우
-inline int atp_workunlock();	// 작업쓰레드간에 동기화를 위한 락이 필요한 경우
+int atp_worklock();		// 작업쓰레드간에 동기화를 위한 락이 필요한 경우
+int atp_workunlock();	// 작업쓰레드간에 동기화를 위한 락이 필요한 경우
 
 // -------------------------------------------
 
 #if defined(DEBUGTRACE)
 	#define TRACE(...) \
-	{ \
+	/* do while(0) 문은 블록이 없는 if문에서도 구문 없이 사용하기 위한 방법이다 */ \
+	do { \
 		time_t now = time(NULL); \
 		struct	tm tm_s; \
 		localtime_r(&now, &tm_s); \
@@ -142,9 +143,9 @@ inline int atp_workunlock();	// 작업쓰레드간에 동기화를 위한 락이
 		snprintf(buf+len,sizeof(buf)-len,__VA_ARGS__); \
 		fwrite(buf,sizeof(char),strlen(buf),stdout); \
 		fflush(stdout); \
-	}
+	}while(0) 
 #else
-	#define TRACE(...)
+	#define TRACE(...) printf(__VA_ARGS__)
 #endif
 
 #endif	// end of #define (__AYNC_THREAD_POOL__)

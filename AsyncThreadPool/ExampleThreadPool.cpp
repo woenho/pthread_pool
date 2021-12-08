@@ -1,11 +1,9 @@
 
-#define DEBUGTRACE
-
 #include "AsyncThreadPool.h"
 
 ATP_STAT sub1(PATP_DATA data)
 {
-	TRACE("--------------- %s func, data is (%s)\n", __func__, data->s ? data->s : "");
+	TRACE("--------------- %s func, data is (%s), with threadno(%d)\n", __func__, data->s ? data->s : "", data->threadNo);
 	usleep(500000); // 0.5 second
 
 	return stat_suspend;
@@ -13,7 +11,7 @@ ATP_STAT sub1(PATP_DATA data)
 
 ATP_STAT sub2(PATP_DATA data)
 {
-	TRACE("--------------- %s func, data is (%s)\n", __func__, data->s ? data->s : "");
+	TRACE("--------------- %s func, data is (%s), with threadno(%d)\n", __func__, data->s ? data->s : "", data->threadNo);
 	sleep(1); // 1 second
 
 	return stat_suspend;
@@ -21,7 +19,7 @@ ATP_STAT sub2(PATP_DATA data)
 
 ATP_STAT sub3(PATP_DATA data)
 {
-	TRACE("--------------- %s func, data is (%s)\n", __func__, data->s ? data->s : "");
+	TRACE("--------------- %s func, data is (%s), with threadno(%d)\n", __func__, data->s ? data->s : "", data->threadNo);
 	sleep(2); // 2 second
 
 	return stat_suspend;
@@ -29,25 +27,53 @@ ATP_STAT sub3(PATP_DATA data)
 
 ATP_STAT sub9(PATP_DATA data)
 {
-	TRACE("--------------- %s func, msg is (%s)\n", __func__, data->s ? data->s : "");
+	TRACE("--------------- %s func, data is (%s), with threadno(%d)\n", __func__, data->s ? data->s : "", data->threadNo);
 	sleep(90);
 
 	return stat_suspend;
 }
 
+ATP_STAT lock1(PATP_DATA data)
+{
+	TRACE("111111111111111 %s func, before lock, with threadno(%d)\n", __func__, data->threadNo);
+	atp_worklock();
+	TRACE("222222222222222 %s func, got    lock, with threadno(%d)\n", __func__, data->threadNo);
+	sleep(1);
+	TRACE("333333333333333 %s func, after  sleep, with threadno(%d)\n", __func__, data->threadNo);
+	atp_workunlock();
+	TRACE("444444444444444 %s func, after  unlock, with threadno(%d)\n", __func__, data->threadNo);
+
+	return stat_suspend;
+}
+
+ATP_STAT lock2(PATP_DATA data)
+{
+	TRACE("111111111111111 %s func, before lock, with threadno(%d)\n", __func__, data->threadNo);
+	atp_worklock();
+	TRACE("222222222222222 %s func, got    lock, with threadno(%d)\n", __func__, data->threadNo);
+	sleep(2);
+	TRACE("333333333333333 %s func, after  sleep, with threadno(%d)\n", __func__, data->threadNo);
+	atp_workunlock();
+	TRACE("444444444444444 %s func, after  unlock, with threadno(%d)\n", __func__, data->threadNo);
+
+	return stat_suspend;
+}
+
+
+
 ATP_STAT test(PATP_DATA param)
 {
-	if (param->func)
+	if (param->func) {
 		return param->func(param);
-	else
-		TRACE(" %s func, message is (%s)\n", __FUNCTION__, param->s  ? param->s : "");
-
+	} else {
+		TRACE(" %s func, message is (%s), with threadno(%d)\n", __FUNCTION__, param->s ? param->s : "", param->threadNo);
+	}
 	return stat_suspend;
 }
 
 ATP_STAT exit_func(PATP_DATA param)
 {
-	TRACE(" %s func, OK exit func check (%s)\n", __FUNCTION__, param && param->s ? param->s : "");
+	TRACE(" %s func, OK exit func check (%s), with threadno(%d)\n", __FUNCTION__, param && param->s ? param->s : "", param->threadNo);
 
 	return stat_exited;
 }
@@ -78,30 +104,29 @@ int main(int argc, char* argv[])
 		case 0:
 			atpdata->func = sub1;
 			if (!atp_addQueue(atpdata)) {
-				TRACE("--------------- thread add real Queue successed %d \n", nIndx);
+				TRACE("++++++++++++++++++++ thread add real Queue successed %d \n", nIndx);
 			} else {
 				free(atpdata);
-				TRACE("--------------- thread add real Queue failed %d \n", nIndx);
+				TRACE("++++++++++++++++++++ thread add real Queue failed %d \n", nIndx);
 			}
 			break;
 		case 1:
 			atpdata->func = sub2;
 			if (!atp_addQueue(atpdata)) {
-				TRACE("--------------- thread add real Queue successed %d \n", nIndx);
+				TRACE("++++++++++++++++++++ thread add real Queue successed %d \n", nIndx);
 			}
 			else {
 				free(atpdata);
-				TRACE("--------------- thread add real Queue failed %d \n", nIndx);
+				TRACE("++++++++++++++++++++ thread add real Queue failed %d \n", nIndx);
 			}
 			break;
 		default:
 			atpdata->func = sub3;
-			if (!atp_addQueue(atpdata,atp_normal)) {
-				TRACE("--------------- thread add normal Queue successed %d \n", nIndx);
-			}
+			if (!atp_addQueue(atpdata,atp_normal)) 
+				TRACE("++++++++++++++++++++ thread add normal Queue successed %d \n", nIndx);
 			else {
 				free(atpdata);
-				TRACE("--------------- thread add normal Queue failed %d \n", nIndx);
+				TRACE("++++++++++++++++++++ thread add normal Queue failed %d \n", nIndx);
 			}
 		}
 		// realtime 우선순위의 다 처리하면 중간중간 normal 우선순의를 실행할 수 있도록 시간 맞추기 힘들군...
@@ -147,7 +172,26 @@ int main(int argc, char* argv[])
 
 	atp_destroy(end, exit);
 
+	// -------------------------
+	TRACE("================ work thread lock test =========\n");
+	// -------------------------
+	// 
 
+	atp_create(5, test);
+
+	for (nIndx = 0; nIndx < 10; nIndx++) {
+		atpdata = atp_alloc(data_size);
+		snprintf(atpdata->s, atpdata->s_len, "lock seq (%d)", nIndx);
+		if (nIndx % 2)
+			atpdata->func = lock1;
+		else
+			atpdata->func = lock2;
+		atp_addQueue(atpdata);
+	}
+
+	sleep(10);
+
+	atp_destroy(end, exit);
 
 	return 0;
 }
