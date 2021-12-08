@@ -132,7 +132,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None Include="Makefile" />
-    <None Include="Readme.md" />
+    <None Include="README.md" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AsyncThreadPool.h" />
