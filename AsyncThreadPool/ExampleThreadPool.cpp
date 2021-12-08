@@ -179,7 +179,7 @@ int main(int argc, char* argv[])
 
 	atp_create(5, test);
 
-	for (nIndx = 0; nIndx < 10; nIndx++) {
+	for (nIndx = 0; nIndx < 7; nIndx++) {
 		atpdata = atp_alloc(data_size);
 		snprintf(atpdata->s, atpdata->s_len, "lock seq (%d)", nIndx);
 		if (nIndx % 2)
@@ -189,7 +189,9 @@ int main(int argc, char* argv[])
 		atp_addQueue(atpdata);
 	}
 
-	sleep(10);
+	sleep(8);
+
+	TRACE("================ thread pool terminate =========\n");
 
 	atp_destroy(end, exit);
 
