@@ -35,26 +35,26 @@ ATP_STAT sub9(PATP_DATA data)
 
 ATP_STAT lock1(PATP_DATA data)
 {
-	TRACE("111111111111111 %s func, before lock, with threadno(%d)\n", __func__, data->threadNo);
+	TRACE("111111111111111 %s func, wait   lock, with threadno(%d), lock queue count(%d)\n", __func__, data->threadNo, atp_getWorkLockCount());
 	atp_worklock();
-	TRACE("222222222222222 %s func, got    lock, with threadno(%d)\n", __func__, data->threadNo);
+	TRACE("222222222222222 %s func, got    lock, with threadno(%d), lock queue count(%d)\n", __func__, data->threadNo, atp_getWorkLockCount());
 	sleep(1);
-	TRACE("333333333333333 %s func, after  sleep, with threadno(%d)\n", __func__, data->threadNo);
+	TRACE("333333333333333 %s func, finish job, with threadno(%d)\n", __func__, data->threadNo);
 	atp_workunlock();
-	TRACE("444444444444444 %s func, after  unlock, with threadno(%d)\n", __func__, data->threadNo);
+	// TRACE("444444444444444 %s func, after  unlock, with threadno(%d)\n", __func__, data->threadNo);
 
 	return stat_suspend;
 }
 
 ATP_STAT lock2(PATP_DATA data)
 {
-	TRACE("111111111111111 %s func, before lock, with threadno(%d)\n", __func__, data->threadNo);
+	TRACE("111111111111111 %s func, wait   lock, with threadno(%d), lock queue count(%d)\n", __func__, data->threadNo, atp_getWorkLockCount());
 	atp_worklock();
-	TRACE("222222222222222 %s func, got    lock, with threadno(%d)\n", __func__, data->threadNo);
+	TRACE("222222222222222 %s func, got    lock, with threadno(%d), lock queue count(%d)\n", __func__, data->threadNo, atp_getWorkLockCount());
 	sleep(2);
-	TRACE("333333333333333 %s func, after  sleep, with threadno(%d)\n", __func__, data->threadNo);
+	TRACE("333333333333333 %s func, finish job, with threadno(%d)\n", __func__, data->threadNo);
 	atp_workunlock();
-	TRACE("444444444444444 %s func, after  unlock, with threadno(%d)\n", __func__, data->threadNo);
+	// TRACE("444444444444444 %s func, after  unlock, with threadno(%d)\n", __func__, data->threadNo);
 
 	return stat_suspend;
 }
@@ -89,6 +89,10 @@ int main(int argc, char* argv[])
 	int nIndx, next;
 
 	atp_create(3, test);
+
+	TRACE("--- timewait test 7 \n");
+	sleep(7); // idle check
+
 	srand(1);
 
 	for (nIndx = 0; nIndx < 15; nIndx++) {
@@ -179,7 +183,7 @@ int main(int argc, char* argv[])
 
 	atp_create(5, test);
 
-	for (nIndx = 0; nIndx < 7; nIndx++) {
+	for (nIndx = 0; nIndx < 9; nIndx++) {
 		atpdata = atp_alloc(data_size);
 		snprintf(atpdata->s, atpdata->s_len, "lock seq (%d)", nIndx);
 		if (nIndx % 2)

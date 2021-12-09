@@ -32,24 +32,26 @@ ExampleThreadPool.cpp 라는 예제 프로그램을 이용하여 라이브러리
 
 처리순서:
 -> atp_create()로 쓰레드 풀 생성 
-	{ 반복 }
-	-> atp_alloc()로 사용자함수에 넘겨줄 데이타 생성
-	-> atp_addQueue() 로 작업 의뢰
+	{	--반복--
+		-> atp_alloc()로 사용자함수에 넘겨줄 데이타 생성
+		-> atp_addQueue() 로 작업 의뢰
+	}
 -> atp_destroy() 로 쓰레드 종료
 
 함수 설명:
-1. atp_create(): 쓰레드 풀을 생성한다
-2. atp_destroy(): 쓰레드 풀을 종료한다
-3. atp_addQueue(): 쓰레드 풀에 작업을 의뢰한다
-4. atp_setwaittime(): 쓰레드가 스스로 깨어나는 시간을 설정한다 (default 3 sec)
-5. atp_setfunc(): 쓰레드 종료시 처리하고 호출하고 싶은 사용자함수, 쓰레드가 Idle time 일 때 호출하고 싶은 사용자함수를 설정한다
-6. atp_worklock(): 사용자 함수간에 락이 필요한 경우 호출
-7. atp_workunlock(): atp_worklock()를 호출 한 경우 반드시 락을 해제 한다
-8. atp_getThreadCount(): atp_create() 호출시 지정한 워크 쓰레드 숫자를 가져온다
-9. atp_getThreadInfo(): 워크쓰레드목록을 가져온다
-10. atp_getRealtimeQueueCount(): atp_addQueue()로 요청한 작업 목록 중 아직 워크쓰레드에 작업의뢰를 하지 못한 realtime 우선순위의 작업목록 수를 조회한다.
-10. atp_getNormalQueueCount(): atp_addQueue()로 요청한 작업 목록 중 아직 워크쓰레드에 작업의뢰를 하지 못한 normal 우선순위의 작업목록 수를 조회한다.
-11. atp_alloc(): atp_addQueue() 함수로 작업을 의뢰할때 사용되는 인자는 반드시 이 함수를 사용하여 메모리를 생성한 후 사용하도록 한다. 메모리 해제는 라이브러리가 자동으로 수행한다.
+ 1. atp_create(): 쓰레드 풀을 생성한다
+ 2. atp_destroy(): 쓰레드 풀을 종료한다
+ 3. atp_addQueue(): 쓰레드 풀에 작업을 의뢰한다
+ 4. atp_setwaittime(): 쓰레드가 스스로 깨어나는 시간을 설정한다 (default 3 sec)
+ 5. atp_setfunc(): 쓰레드 종료시 처리하고 호출하고 싶은 사용자함수, 쓰레드가 Idle time 일 때 호출하고 싶은 사용자함수를 설정한다
+ 6. atp_worklock(): 사용자 함수간에 락이 필요한 경우 호출
+ 7. atp_workunlock(): atp_worklock()를 호출 한 경우 반드시 락을 해제 한다
+ 8. atp_getWorkLockCount():	작업쓰레드간에 동기화를 위한 락 대기열 숫자 조회
+ 9. atp_getThreadCount(): atp_create() 호출시 지정한 워크 쓰레드 숫자를 가져온다
+10. atp_getThreadInfo(): 워크쓰레드목록을 가져온다
+11. atp_getRealtimeQueueCount(): atp_addQueue()로 요청한 작업 목록 중 아직 워크쓰레드에 작업의뢰를 하지 못한 realtime 우선순위의 작업목록 수를 조회한다.
+12. atp_getNormalQueueCount(): atp_addQueue()로 요청한 작업 목록 중 아직 워크쓰레드에 작업의뢰를 하지 못한 normal 우선순위의 작업목록 수를 조회한다.
+13. atp_alloc(): atp_addQueue() 함수로 작업을 의뢰할때 사용되는 인자는 반드시 이 함수를 사용하여 메모리를 생성한 후 사용하도록 한다. 메모리 해제는 라이브러리가 자동으로 수행한다.
 
 enum 변수 설명:
 1. ATP_END: atp_destroy() 호출시 종료 모드
@@ -72,4 +74,5 @@ release 모드 컴파일시는 libAsyncThreadPool.a 가 생성되고
 편집 및 디버깅은 visual studio 2019 을 사용했다.
 VS환경을 원격지 리눅스개발 모드로 설정하여 컴파일 및 시험은 원격지리눅스를 이용하였다.
 pthread 라이브러리를 이용한 간단한 소스지만 사용하기 쉽고 편리한 멀티타스킹 환경을 제공한다.
-
+관리 쓰레드의 CPU사용량을 최적화 한다
+관리쓰레드는 워크쓰레드에 일을 맡길 때 워크쓰레드가 작업을 시작하는데 걸리는 평균시간 만큼 기다렸다가 다음 작업을 준다. 

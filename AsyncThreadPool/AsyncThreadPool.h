@@ -121,6 +121,7 @@ int atp_getNormalQueueCount(); // 여유시간작업의뢰 큐 갯수를 리턴�
 // mutex 관련
 int atp_worklock();		// 작업쓰레드간에 동기화를 위한 락이 필요한 경우
 int atp_workunlock();	// 작업쓰레드간에 동기화를 위한 락이 필요한 경우
+unsigned int atp_getWorkLockCount();	// 작업쓰레드간에 동기화를 위한 락 대기열 숫자 조회
 
 // -------------------------------------------
 
