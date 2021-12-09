@@ -40,7 +40,7 @@ ExampleThreadPool.cpp 라는 예제 프로그램을 이용하여 라이브러리
 
 함수 설명:
  1. atp_create(): 쓰레드 풀을 생성한다
- 2. atp_destroy(): 쓰레드 풀을 종료한다
+ 2. atp_destroy(): 쓰레드 풀을 종료한다, endwaittime의 default 값은 5e+6 (5초) 이다
  3. atp_addQueue(): 쓰레드 풀에 작업을 의뢰한다
  4. atp_setwaittime(): 쓰레드가 스스로 깨어나는 시간을 설정한다 (default 3 sec)
  5. atp_setfunc(): 쓰레드 종료시 처리하고 호출하고 싶은 사용자함수, 쓰레드가 Idle time 일 때 호출하고 싶은 사용자함수를 설정한다

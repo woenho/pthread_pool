@@ -98,7 +98,7 @@ typedef struct _THREADINFO
 
 // AsyncThreadPool 을 이용하는 기본적인 함수들
 int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal=NULL, pthread_attr_t* stAttr=NULL);
-int atp_destroy(ATP_END endcode, bool use_exit_func=false);
+int atp_destroy(ATP_END endcode, bool use_exit_func=false, useconds_t endwaittime=5000000U);
 	
 // atp_addQueue() 는 정상 작동하면 0 을 리턴한다. 큐를 추가하지 못했으면 -1 을 리턴한다
 int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority=atp_realtime);
@@ -129,24 +129,26 @@ unsigned int atp_getWorkLockCount();	// 작업쓰레드간에 동기화를 위�
 	#define TRACE(...) \
 	/* do while(0) 문은 블록이 없는 if문에서도 구문 없이 사용하기 위한 방법이다 */ \
 	do { \
-		time_t now = time(NULL); \
-		struct	tm tm_s; \
-		localtime_r(&now, &tm_s); \
-		char buf[4096]; \
-		int len = sprintf(buf,"%04d-%02d-%02d %02d:%02d:%02d " \
-			, tm_s.tm_year + 1900 \
-			, tm_s.tm_mon + 1 \
-			, tm_s.tm_mday \
-			, tm_s.tm_hour \
-			, tm_s.tm_min \
-			, tm_s.tm_sec \
+		struct timeval debug_now; \
+		struct	tm debug_tm; \
+		gettimeofday(&debug_now, NULL); \
+		localtime_r(&debug_now.tv_sec,&debug_tm);\
+		char debug_buf[4096]; \
+		int debug_len = sprintf(debug_buf,"%04d-%02d-%02d %02d:%02d:%02d.%.3ld " \
+			, debug_tm.tm_year + 1900 \
+			, debug_tm.tm_mon + 1 \
+			, debug_tm.tm_mday \
+			, debug_tm.tm_hour \
+			, debug_tm.tm_min \
+			, debug_tm.tm_sec \
+			, debug_now.tv_usec / 1000 \
 			); \
-		snprintf(buf+len,sizeof(buf)-len,__VA_ARGS__); \
-		fwrite(buf,sizeof(char),strlen(buf),stdout); \
+		snprintf(debug_buf+debug_len,sizeof(debug_buf)-debug_len,__VA_ARGS__); \
+		fwrite(debug_buf,sizeof(char),strlen(debug_buf),stdout); \
 		fflush(stdout); \
 	}while(0) 
 #else
-	#define TRACE(...) printf(__VA_ARGS__)
+	#define TRACE(...) 
 #endif
 
 #endif	// end of #define (__AYNC_THREAD_POOL__)

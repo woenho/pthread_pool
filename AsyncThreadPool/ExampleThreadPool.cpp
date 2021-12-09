@@ -193,7 +193,7 @@ int main(int argc, char* argv[])
 		atp_addQueue(atpdata);
 	}
 
-	sleep(8);
+	sleep(7);
 
 	TRACE("================ thread pool terminate =========\n");
 

@@ -12,6 +12,7 @@ pthread_cond_t	hEvent;			// 쓰레드 깨움 이벤트시그널
 static int g_mainThread_run = 0; // 0으로 설정하면 관리 쓰레드 종료한다
 static int g_workThread_run = 0; // 0으로 설정하면 work 쓰레드 종료한다
 static int g_mainThread_use_exit_func = 0; // 1로 설정하면 모든 워크 쓰레드에 atp_exit_func 를 호출하고 종료하게 한다
+useconds_t g_endwaittime;	// 쓰레드풀 종료 시 작업하고있는 쓰레드를 기다릴 쵀대 시간을 지정한다
 
 PTHREADINFO g_thread = NULL;	// 워크 쓰레드관리 테이블 포인트
 static int g_nThreadCount = 0;
@@ -60,13 +61,15 @@ void* mainthread(void* param)
 {
 	int i;
 	bool bRequested;
-	useconds_t waittime;
+	useconds_t waittime = 0;
 	struct timeval timenow;
 	useconds_t seconds = 0;
 	useconds_t microseconds = 0;
+	g_requestWorkDelay = 0; // 최초 시작은 0으로
 
 	while (g_mainThread_run) {
 		// TRACE("mainthread..... run\n");
+		waittime = 100000; // 1. 작업큐가 비었을 때, 2. 의뢰된 작업이 아직 처리시작 되지 못한 때 -> 작업큐 검사는 1초에 10회
 		if (!g_queueRealtime.empty() || !g_queueNormal.empty()) { // if (큐가 있으면)
 			bRequested = false;
 			// 시그널 보내기 전에 반드시 락을 건다...
@@ -77,6 +80,7 @@ void* mainthread(void* param)
 						g_nextRealtime = g_queueRealtime.front();
 						g_queueRealtime.pop();
 						gettimeofday(&g_requestWorktime, (struct timezone*)NULL);	// 작업의뢰시각 기록
+						pthread_cond_signal(&hEvent);
 						bRequested = true;
 						TRACE("mainthread. request a realtime job, delay:%u\n", g_requestWorkDelay);
 					}
@@ -86,13 +90,18 @@ void* mainthread(void* param)
 						g_nextNormal = g_queueNormal.front();
 						g_queueNormal.pop();
 						gettimeofday(&g_requestWorktime, (struct timezone*)NULL);	// 작업의뢰시각 기록
+						pthread_cond_signal(&hEvent);
 						bRequested = true;
 						TRACE("mainthread. request a normal job, delay:%u\n", g_requestWorkDelay);
 					}
 				}
-
-				if (g_nextRealtime|| g_nextNormal) {
-					// 앞전에 시그널를 보냈는데 쉬는 쓰레드가 없었다면 이리 다시 온다... 다시 시그널을 보내자
+				
+				if (bRequested) {
+					// 처리했다면 워크쓰레드가 작업을 받아가는 평균 시간 만큼 기다리자
+					// 처리하지 못했다면 노는 쓰레드가 없다. 좀 쉬었다가 다음 처리하자
+					waittime = g_requestWorkDelay;
+				} else if (g_nextRealtime|| g_nextNormal) {
+					// 앞전에 시그널를 보냈는데 쉬는 쓰레드가 없었다면 이리 온다... 다시 시그널을 보내자
 					pthread_cond_signal(&hEvent);
 					gettimeofday(&timenow, NULL);
 					seconds = timenow.tv_sec - g_requestWorktime.tv_sec;
@@ -101,16 +110,8 @@ void* mainthread(void* param)
 				}
 				pthread_mutex_unlock(&hMutex);
 			}
-			// 처리했다면 워크쓰레드가 작업을 받아가는 평균 시간 만큼 기다리자
-			// 처리하지 못했다면 노는 쓰레드가 없다. 좀 쉬었다가 다음 처리하자
-			// 실험결과 usleep은 정확한 마이크로시간종안 슬립하지 않는다
-			if (bRequested) {
-				if (g_requestWorkDelay)
-				waittime = g_requestWorkDelay;
-			} else {
-				waittime = 100000; // 1. 작업큐가 비었을 때, 2. 의뢰된 작업이 아직 처리시작 되지 못한 때 -> 작업큐 검사는 1초에 10회
-			}
 		}
+		// 실험결과 usleep은 정확한 마이크로시간 동안 슬립하지 않는다
 		// 큐에들어온 자료확인은 좀 천천히 하자 cpu 소모 많다
 		// SleepUSec(waittime);
 		usleep(waittime);
@@ -151,7 +152,7 @@ void* mainthread(void* param)
 						}
 					}
 				}
-				// 만일 아직 남은 잡이 있다면 모든 쓰레드가 개어난 남은 잡을 가져가 실행 하고
+				// 만일 아직 남은 잡이 있다면 모든 쓰레드가 깨어나 남은 잡을 가져가 실행 하고
 				// 아니면 stat_exit 상태에 다른 작업을 모든 쓰레드가 수행해야 한다
 				pthread_cond_broadcast(&hEvent);
 				pthread_mutex_unlock(&hMutex);
@@ -176,14 +177,13 @@ void* mainthread(void* param)
 	// 모든 워크쓰레드가 정상종료 되었는지 최대 10회 검증한다, 최대 5초 소요 후 강제 종료
 	TRACE("=== check exited all workthread\n");
 
+	microseconds = 0;
 	do
 	{
-		if (++nTryCount > 10) {
-			break;
-		} else {
-			usleep(500000);
-		}
-		// TRACE("Check to thread end! Try Count(%d)\n", nTryCount);
+		usleep(500000);
+		microseconds += 500000;
+
+		TRACE("Check to thread end! wait time(%d/%d)\n", microseconds, g_endwaittime);
 
 		nExitCount = 0;
 		for (i = 0; i < g_nThreadCount; i++) {
@@ -196,7 +196,7 @@ void* mainthread(void* param)
 				nExitCount++;
 			}
 		}
-	} while (nExitCount < g_nThreadCount);
+	} while (nExitCount < g_nThreadCount && microseconds <= g_endwaittime);
 	
 	free(szThreadStatus);
 
@@ -427,9 +427,11 @@ int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal,
 	return 0;
 }
 
-int atp_destroy(ATP_END endcode, bool use_exit_func)
+int atp_destroy(ATP_END endcode, bool use_exit_func, useconds_t endwaittime)
 {
 	TRACE("=== %s() order: thread pool stop, atp_end code=%d\n", __func__, endcode);
+
+	g_endwaittime = endwaittime;
 
 	if (endcode == gracefully) {
 		TRACE("=== %s() gracefully thread pool down check\n", __func__);
