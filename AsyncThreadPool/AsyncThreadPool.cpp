@@ -11,11 +11,11 @@ pthread_cond_t	hEvent;			// 쓰레드 깨움 이벤트시그널
 // 상태 플러그
 static int g_mainThread_run = 0; // 0으로 설정하면 관리 쓰레드 종료한다
 static int g_workThread_run = 0; // 0으로 설정하면 work 쓰레드 종료한다
-static int g_mainThread_use_exit_func = 0; // 1로 설정하면 모든 워크 쓰레드에 atp_exit_func 를 호출하고 종료하게 한다
+static int g_mainThread_use_exit_func; // 1로 설정하면 모든 워크 쓰레드에 atp_exit_func 를 호출하고 종료하게 한다
 useconds_t g_endwaittime;	// 쓰레드풀 종료 시 작업하고있는 쓰레드를 기다릴 쵀대 시간을 지정한다
 
-PTHREADINFO g_thread = NULL;	// 워크 쓰레드관리 테이블 포인트
-static int g_nThreadCount = 0;
+PTHREADINFO g_thread;		// 워크쓰레드관리 테이블 포인트
+static int g_nThreadCount;	// 워크쓰레드 수
 pthread_t g_MainThreadID;	// 관리쓰레드 아이덴티파이어
 
 queue<PATP_DATA> g_queueRealtime;
@@ -65,7 +65,12 @@ void* mainthread(void* param)
 	struct timeval timenow;
 	useconds_t seconds = 0;
 	useconds_t microseconds = 0;
+
 	g_requestWorkDelay = 0; // 최초 시작은 0으로
+	g_mainThread_use_exit_func = 0;
+	g_nextRealtime = NULL;
+	g_nextNormal = NULL;
+	g_mutexWorkCount = 0;
 
 	while (g_mainThread_run) {
 		// TRACE("mainthread..... run\n");
@@ -82,7 +87,7 @@ void* mainthread(void* param)
 						gettimeofday(&g_requestWorktime, (struct timezone*)NULL);	// 작업의뢰시각 기록
 						pthread_cond_signal(&hEvent);
 						bRequested = true;
-						TRACE("mainthread. request a realtime job, delay:%u\n", g_requestWorkDelay);
+						TRACE("mainthread. request a realtime job, avrage fetch delay:%u\n", g_requestWorkDelay);
 					}
 				} else {
 					// 리얼타임 우선순위의 잡이 없다면
@@ -124,7 +129,7 @@ void* mainthread(void* param)
 	int nTryCount;
 	if (g_mainThread_use_exit_func) {
 		// 종료할 때 워크쓰레드 사용자함수를 호출하고 종료하라고 요청을 받았다면
-		TRACE("=== set exit signal to all workthread\n");
+		TRACE("=== set exit signal to all work threads\n");
 		nTryCount = 0;
 		do {
 			// 모든 워크쓰레드의 상태를 stat_exit 로 설정하는것을 10회 시도한다. 최대 5초간 시도
@@ -163,7 +168,7 @@ void* mainthread(void* param)
 	} else {
 		// 각 워크쓰레드 종료함수 호출 필요없는 경우
 		// 실행유지플래그(g_workThread_run)를 끄고 일제히 깨운다
-		TRACE("=== all thread broadcast exit !\n");
+		TRACE("=== all thread broadcast signal !\n");
 		g_workThread_run = 0;
 		pthread_cond_broadcast(&hEvent);
 	}
@@ -175,7 +180,7 @@ void* mainthread(void* param)
 	nTryCount = 0;
 
 	// 모든 워크쓰레드가 정상종료 되었는지 최대 10회 검증한다, 최대 5초 소요 후 강제 종료
-	TRACE("=== check exited all workthread\n");
+	TRACE("=== check exited all work threads\n");
 
 	microseconds = 0;
 	do
@@ -238,8 +243,8 @@ void* workthread(void* param)
 	int nStat;
 	struct timespec waittime;
 	struct timeval timenow;
-	long seconds = 0;
-	long microseconds = 0;
+	useconds_t seconds = 0;
+	useconds_t microseconds = 0;
 
 	while (g_workThread_run) {
 
@@ -316,7 +321,7 @@ void* workthread(void* param)
 
 			// 실행명령 전달받음
 			me->nExecuteCount++;
-			TRACE("workthread no(%d), I got a realtime job. excuted: %lu\n", me->nThreadNo, me->nExecuteCount);
+			TRACE("workthread no(%d), I got a realtime job. fetch delay:%u, excuted: %lu\n", me->nThreadNo, microseconds, me->nExecuteCount);
 
 			ATP_STAT next = stat_suspend;
 
@@ -349,8 +354,8 @@ void* workthread(void* param)
 
 			// 실행명령 전달받음
 			me->nExecuteCount++;
-			TRACE("workthread no(%d), I got a normal job. (real queue size = %lu, normal = %lu)\n"
-				, me->nThreadNo, g_queueRealtime.size(), g_queueNormal.size());
+			TRACE("workthread no(%d), I got a normal job. fetch delay:%u, (real queue size = %lu, normal = %lu)\n"
+				, me->nThreadNo, microseconds, g_queueRealtime.size(), g_queueNormal.size());
 
 			ATP_STAT next = stat_suspend;
 			if (job_data) {
@@ -397,15 +402,9 @@ int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal,
 
 	g_thread = (PTHREADINFO)malloc(sizeof(THREADINFO) * nThreadCount);
 	bzero(g_thread, sizeof(THREADINFO) * nThreadCount);
-
-	// 쓰레드 생성전에 설정해야한다. 값이 0이면 쓰레드 만들자 마자 종료한다
-	g_mainThread_run = 1;
-	g_workThread_run = 1;
-	g_mainThread_use_exit_func = 0;
-	g_nextRealtime = NULL;
-	g_nextNormal = NULL;
-	g_mutexWorkCount = 0;
-	g_requestWorkDelay = 0;	// 워크쓰레드에 작업의뢰를 한 후 실제 작업쓰레드가 작업을 시작까지 걸리는 시간 (자동계산)
+	
+	g_mainThread_run = 1;	// 쓰레드 생성전에 설정해야한다. 값이 0이면 쓰레드 만들자 마자 종료한다
+	g_workThread_run = 1;	// 쓰레드 생성전에 설정해야한다. 값이 0이면 쓰레드 만들자 마자 종료한다
 
 	// 워크쓰레드 생성
 	for (int i = 0; i < g_nThreadCount; i++) {
@@ -448,9 +447,18 @@ int atp_destroy(ATP_END endcode, bool use_exit_func, useconds_t endwaittime)
 		}
 	}
 
+	TRACE("=== %s() clear memory\n", __func__);
 	// 작업의뢰 큐의 나머지 청소, 청소하지 않으면 다시 쓰레드 생성할 때 이전에 의뢰한 작업이 먼저 실행된다.
 	while (g_queueRealtime.size()) { free(g_queueRealtime.front()); g_queueRealtime.pop(); }
 	while (g_queueNormal.size()) { free(g_queueNormal.front()); g_queueNormal.pop(); }
+	if (g_nextRealtime) {
+		free(g_nextRealtime);
+		g_nextRealtime = 0;
+	}
+	if (g_nextNormal) {
+		free(g_nextNormal);
+		g_nextNormal = 0;
+	}
 
 	// endcode == gracefully 인 경우는 모든 큐 비우고 이 루틴 탄다
 	g_mainThread_use_exit_func = use_exit_func;
