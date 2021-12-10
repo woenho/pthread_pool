@@ -19,7 +19,8 @@ ifeq (release, $(findstring release, $(MAKECMDGOALS))) #"make clean release"으�
 else
 	CFLAGS += $(CFLAGS_DEBUG)
 	LIBATP = libAsyncThreadPool_d.a
-ifeq (debugtrace, $(findstring debugtrace, $(MAKECMDGOALS))) #"make clean debugtrace"으로 clean 다음에 연이어 debugtrace 나올 수가 있다.
+ifeq (debug , $(findstring debug , $(MAKECMDGOALS))) #"make clean debugtrace"으로 clean 다음에 연이어 debugtrace 나올 수가 있다.
+else
 	CFLAGS += -DDEBUGTRACE
 endif
 endif
