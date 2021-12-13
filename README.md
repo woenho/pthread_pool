@@ -66,10 +66,11 @@ enum 변수 설명:
 
 컴파일 방법:
 gnu make 를 통하여 컴파일 한다
-make clean: 생성된 디버그 모드의 오브젝트를 삭제한다 ( make clean all, make clean debug, make clean debugtrace) 일 때 clean 동작 같음
-make all: make debug 와 같이 동작함
-make release: debug trace 를 빼고, 코드를 최적화한다
-make ddugtrace: 쓰레드의 동작상황을 콘솔에 표시한다
+make clean: 생성된 오브젝트를 삭제한다
+make clean all: make debug 와 같이 동작함
+make clean release: 디버그정보 없이 코드를 최적화한다
+make clean ddugtrace: debug 정보 생성 및 쓰레드의 동작상황을 콘솔에 표시한다
+make clean debug: debug 정보 생성
 
 기타:
 release 모드 컴파일시는 libAsyncThreadPool.a 가 생성되고
@@ -84,7 +85,6 @@ pthread 라이브러리를 이용한 간단한 소스지만 사용하기 쉽고 
 즉, 종료 요구를 하고 밀린 작업들을 모두 수행해야 하므로 한참 뒤에 잡을 수행하는 타스크가 시작될 수 있다.
 타스크의 종료대기 시각은 타스크의 시작 시각을 기준으로 한다.
 그러므로 종료모드가  gracefully 라면 종료 대기시간은 종료요청 시각으로부터 많이 길어질 수 있다.
-종료모드가  gracefully 이고 exit 함수 실행요구를 하면 결국 종료대기 시간은 exit 함수의 처리시간이 검증대상이 된다.
+exit 함수 실행요구를 했는데 타스크가 대시시간을 넘어서도 종료되지 않았다면 exit함수는 호출되지 않고 강제종료 시킨다
 종료모드가  gracefully 이고 exit 함수 실행요구를 하지 않으면 요청된 모든 잡의 마지막 셋트가 종료대기의 검증대상이 된다.
-종료모드가  force 이고 exit 함수 실행요구를 하면 결국 종료대기 시간은 exit 함수의 처리시간이 검증대상이 된다.
 종료모드가  force 이고 exit 함수 실행요구를 하지 않으면 현재 처리중인 타스크의 처리시간이 검증대상이 된다.

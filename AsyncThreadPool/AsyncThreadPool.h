@@ -76,10 +76,10 @@ typedef struct _THREADINFO
 	PATP_DATA		atp_exit_data;		// 메인쓰레드가 설정한 상태가 상태가 stat_exit 인 경우 실행할 정보( 쓰레드 종료할 때 free()한다. atp_setfunc() 로 설정)
 
 	// 쓰레드 통계
-	size_t			nRealtimeCount;		// 쓰레드가 realtime 요청을 실행한 건수
-	size_t			nNormalCount;		// 쓰레드가 normal 요청을 실행한 건수
 	struct timeval	beginWorktime;		// 마지막 수행한 잡의 수행 시작 시각
 	struct timeval	endWorktime;		// 마지막 수행한 잡의 수행 종료 시각
+	size_t			nRealtimeCount;		// 쓰레드가 realtime 요청을 실행한 건수
+	size_t			nNormalCount;		// 쓰레드가 normal 요청을 실행한 건수
 	size_t			sumRealtimeWorkingtime;	// realtime 수행 시간의 합 (milliseconds)
 	size_t			sumNormalWorkingtime;	// Normal 수행 시간의 합 (milliseconds)
 	suseconds_t		mostLongtimeRealtime;	// milliseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
@@ -90,11 +90,12 @@ typedef struct _THREADINFO
 	int				protocol;			// tcp or udp
 	char			host[64];
 	unsigned short	port;
+	int				sd;					// socket id (defualt value -1)
 
-	// log info (예약)
-	time_t			logtime;
+	// log info (예약) 쓰레드가 동시에 로그를 날리면 섞여서 로그의 연속성을 분간하기 힘들다. 이때는 쓰레드 번호를 앞에 주어서 분간할 수 있다.. 생각..
+	struct timeval	logtime; // 마이트로초 or 밀리초를 사용하려면 필요
 	struct tm		logtm;
-	char			szThreadLog[1024];
+	char			szThreadLog[4096+24]; // 최대 로그길이 sizeof("YYYY-MM-DD HH:MM:SS.SSS ") = 24
 
 } THREADINFO, *PTHREADINFO;
 
@@ -159,7 +160,7 @@ inline size_t atp_getAverageNormalWorkingtime(int nThreadNo) {	// 평균 밀리�
 		struct	tm debug_tm; \
 		gettimeofday(&debug_now, NULL); \
 		localtime_r(&debug_now.tv_sec,&debug_tm);\
-		char debug_buf[4096]; \
+		char debug_buf[4096+24]; \
 		int debug_len = sprintf(debug_buf,"%04d-%02d-%02d %02d:%02d:%02d.%.3ld " \
 			, debug_tm.tm_year + 1900 \
 			, debug_tm.tm_mon + 1 \

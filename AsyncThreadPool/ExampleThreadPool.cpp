@@ -87,7 +87,9 @@ int main(int argc, char* argv[])
 	size_t data_size = 1024;
 	PATP_DATA atpdata;
 	int nIndx, next;
+#if defined(DEBUGTRACE)
 	PTHREADINFO pThread;
+#endif
 	ATP_END end = argc > 1 ? atoi(argv[1]) ? gracefully : force : gracefully;
 	bool exit = argc > 2 ? atoi(argv[2]) ? true : false : false;
 
@@ -154,6 +156,7 @@ int main(int argc, char* argv[])
 	
 	TRACE("--- thread pool terminate ---\n");
 	TRACE("--- thread realtime queue_size(%d), normal queue_size(%d)\n", atp_getRealtimeQueueCount(), atp_getNormalQueueCount());
+#if defined(DEBUGTRACE)
 	TRACE("-------------------------------------------\n");
 	pThread = atp_getThreadInfo();
 	for (nIndx = 0; nIndx < atp_getThreadCount(); nIndx++) {
@@ -161,6 +164,7 @@ int main(int argc, char* argv[])
 			, pThread[nIndx].nThreadNo, pThread[nIndx].nRealtimeCount, pThread[nIndx].nNormalCount);
 	}
 	TRACE("-------------------------------------------\n");
+#endif
 
 
 	TRACE("--- endcode(%s) exit_func(%s)\n", end == gracefully ? "gracefully" : "force", exit ? "true" : "fale");
@@ -221,6 +225,7 @@ int main(int argc, char* argv[])
 
 	TRACE("--- thread pool terminate ---\n");
 	TRACE("--- thread realtime queue_size(%d), normal queue_size(%d)\n", atp_getRealtimeQueueCount(), atp_getNormalQueueCount());
+#if defined(DEBUGTRACE)
 	TRACE("-------------------------------------------\n");
 	pThread = atp_getThreadInfo();
 	for (nIndx = 0; nIndx < atp_getThreadCount(); nIndx++) {
@@ -228,6 +233,7 @@ int main(int argc, char* argv[])
 			, pThread[nIndx].nThreadNo, pThread[nIndx].nRealtimeCount, pThread[nIndx].nNormalCount);
 	}
 	TRACE("-------------------------------------------\n");
+#endif
 
 	atp_destroy(end, exit);
 

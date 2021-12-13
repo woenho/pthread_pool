@@ -429,6 +429,7 @@ int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal,
 		g_thread[i].atp_normal_func = normal ? normal : realtime;	// 같은 함수를 호출할 가능성이 많다
 		g_thread[i].waittime.tv_sec = 3; // default 3 second
 		g_thread[i].waittime.tv_nsec = 0; // default 0 nano second
+		g_thread[i].sd = -1; // invalid socket no is (-1)
 		pthread_create(&g_thread[i].threadID, stAttr, workthread, &g_thread[i]);
 		pthread_detach(g_thread[i].threadID);	// pthread_exit(0); 시 리소스 자동 해제
 	}
