@@ -60,6 +60,7 @@ inline void SleepUSec(useconds_t a_nUSec)
 void* mainthread(void* param)
 {
 	int i;
+	int nCheckExit;
 	bool bRequested;
 	useconds_t waittime = 0;
 	struct timeval timenow;
@@ -125,24 +126,16 @@ void* mainthread(void* param)
 	// 만일 아직 남은 잡이 있다면 모든 쓰레드가 깨어나 나머지 일을 해야한다
 	pthread_cond_broadcast(&hEvent);
 
-	int nCheck;
-	int nTryCount;
+	microseconds = 0;
+
 	if (g_mainThread_use_exit_func) {
 		// 종료할 때 워크쓰레드 사용자함수를 호출하고 종료하라고 요청을 받았다면
 		TRACE("=== set exit signal to all work threads\n");
-		nTryCount = 0;
 		do {
-			// 모든 워크쓰레드의 상태를 stat_exit 로 설정하는것을 10회 시도한다. 최대 5초간 시도
-			if (++nTryCount > 10) {
-				break;
-			}
-			else {
-				usleep(500000); // 0.5 second 
-			}
-			// TRACE("Try to set thread exit! Try Count(%d)\n", nTryCount);
+			usleep(500000); // 0.5 second 
+			microseconds += 500000;
 
-
-			nCheck = 0;
+			nCheckExit = 0;
 			// 시그널 보내기 전에 반드시 락을 건다... 걍 하면 이미 쓰레드가 실행 중 일 수 있다
 			if (!pthread_mutex_lock(&hMutex)) {
 				if (!g_nextNormal && !g_nextRealtime) {
@@ -153,7 +146,7 @@ void* mainthread(void* param)
 						}
 						else if (g_thread[i].nThreadStat >= stat_exited) {
 							// 종료한 작업 카운트
-							nCheck++;
+							nCheckExit++;
 						}
 					}
 				}
@@ -162,72 +155,78 @@ void* mainthread(void* param)
 				pthread_cond_broadcast(&hEvent);
 				pthread_mutex_unlock(&hMutex);
 			}
-		} while (nCheck < g_nThreadCount);
+		} while (nCheckExit < g_nThreadCount && microseconds <= g_endwaittime);
 		// 실행유지플래그(g_workThread_run)를 끈다
 		g_workThread_run = 0;
 	} else {
 		// 각 워크쓰레드 종료함수 호출 필요없는 경우
 		// 실행유지플래그(g_workThread_run)를 끄고 일제히 깨운다
-		TRACE("=== all thread broadcast signal !\n");
+		TRACE("=== all thread broadcast terminate signal !\n");
 		g_workThread_run = 0;
 		pthread_cond_broadcast(&hEvent);
 	}
 
-	int nExitCount = 0;
 	char* szThreadStatus = (char*)malloc(g_nThreadCount);
 	bzero(szThreadStatus, g_nThreadCount);
 
-	nTryCount = 0;
-
 	// 모든 워크쓰레드가 정상종료 되었는지 최대 10회 검증한다, 최대 5초 소요 후 강제 종료
-	TRACE("=== check exited all work threads\n");
+	TRACE("=== check exited all work threads endwait time(%d)\n", g_endwaittime);
 
-	microseconds = 0;
 	do
 	{
-		usleep(500000);
-		microseconds += 500000;
-
-		TRACE("Check to thread end! wait time(%d/%d)\n", microseconds, g_endwaittime);
-
-		nExitCount = 0;
+		usleep(100000);
+		nCheckExit = 0;
 		for (i = 0; i < g_nThreadCount; i++) {
 			// 일하는 쓰레드 가 있으면 일이 종료될 때를 기다린다
-			if (g_thread[i].nThreadStat == stat_exited) {
+			if (szThreadStatus[i] || g_thread[i].nThreadStat >= stat_exit) {
 				if (!szThreadStatus[i]) {
-					TRACE("=== thread no(%d), exited ok!\n", g_thread[i].nThreadNo);
 					szThreadStatus[i] = '9';
 				}
-				nExitCount++;
+				nCheckExit++;
+			}
+			else {
+				gettimeofday(&timenow, NULL);
+				seconds = timenow.tv_sec - g_thread[i].beginWorktime.tv_sec;
+				microseconds = timenow.tv_usec - g_thread[i].beginWorktime.tv_usec + (seconds * 1e+6);
+				if (microseconds >= g_endwaittime) {
+					if (!szThreadStatus[i]) {
+						TRACE("=== thread no(%d), need force exit check %d / %d\n", g_thread[i].nThreadNo, microseconds / 1000, g_endwaittime / 1000);
+						szThreadStatus[i] = '9';
+						nCheckExit++;
+					}
+				} else {
+					TRACE("=== thread no(%d), elapsed time %d milliseconds, waittime %d\n", g_thread[i].nThreadNo, microseconds / 1000, g_endwaittime / 1000);
+				}
 			}
 		}
-	} while (nExitCount < g_nThreadCount && microseconds <= g_endwaittime);
+	} while (nCheckExit < g_nThreadCount);
 	
 	free(szThreadStatus);
 
-	// 기다려도 종료하지 않는 쓰레드는 강제 종료 시킨다
-	if (nExitCount < g_nThreadCount) {
-		for (i = 0; i < g_nThreadCount; i++) {
-			if (g_thread[i].nThreadStat != stat_exited) {
-				TRACE("=== thread no(%d), still running. force kill...\n", g_thread[i].nThreadNo);
-				pthread_cancel(g_thread[i].threadID);
-			}
+	TRACE("=== force kill. if still running thread\n");
+	// 기다려도 종료하지 않은 쓰레드는 강제 종료 시킨다
+	for (i = 0; i < g_nThreadCount; i++) {
+		if (g_thread[i].nThreadStat == stat_exited) {
+			TRACE("=== thread no(%d), exited check ok!\n", g_thread[i].nThreadNo);
+		} else {
+			gettimeofday(&timenow, NULL);
+			seconds = timenow.tv_sec - g_thread[i].beginWorktime.tv_sec;
+			microseconds = timenow.tv_usec - g_thread[i].beginWorktime.tv_usec + (seconds * 1e+6);
+			TRACE("=== thread no(%d), still running. force kill. run time(%d milisecond)\n", g_thread[i].nThreadNo, microseconds / 1000);
+			pthread_cancel(g_thread[i].threadID);
 		}
-		
 	}
 
-	if (g_thread) {
-		// workthread memory free
-		for (i = 0; i < g_nThreadCount; i++) {
-			if (g_thread[i].atp_exit_data)
-				free(g_thread[i].atp_exit_data);
-			if (g_thread[i].atp_idle_data)
-				free(g_thread[i].atp_idle_data);			
-		}
-		// table memory free
-		free(g_thread);
-		g_thread = NULL;
+	// workthread memory free
+	for (i = 0; i < g_nThreadCount; i++) {
+		if (g_thread[i].atp_exit_data)
+			free(g_thread[i].atp_exit_data);
+		if (g_thread[i].atp_idle_data)
+			free(g_thread[i].atp_idle_data);			
 	}
+	// table memory free
+	free(g_thread);
+	g_thread = NULL;
 
 	// thread pool table space free
 	g_nThreadCount = 0;
@@ -306,12 +305,12 @@ void* workthread(void* param)
 
 
 		if (g_nextRealtime) {
-			PATP_DATA job_data = g_nextRealtime;
+			me->atp_realtime_data = g_nextRealtime;
 			g_nextRealtime = NULL;		// 비워주어야 관리쓰레드가 다음 작업을 의뢰한다
 			me->nThreadStat = stat_run;
-			gettimeofday(&timenow, NULL);
-			seconds = timenow.tv_sec - g_requestWorktime.tv_sec;
-			microseconds = timenow.tv_usec - g_requestWorktime.tv_usec + (seconds * 1e+6);
+			gettimeofday(&me->beginWorktime, NULL);
+			seconds = me->beginWorktime.tv_sec - g_requestWorktime.tv_sec;
+			microseconds = me->beginWorktime.tv_usec - g_requestWorktime.tv_usec + (seconds * 1e+6);
 #if 0
 			g_requestWorkDelay = microseconds; // 현재의 지연시간이 향후 지연시간이 될 가능성도 많다, 그러나 전체를 보면 평균이 나을것이다
 #else
@@ -320,31 +319,39 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			me->nExecuteCount++;
-			TRACE("workthread no(%d), I got a realtime job. fetch delay:%u, excuted: %lu\n", me->nThreadNo, microseconds, me->nExecuteCount);
+			me->nRealtimeCount++;
+			TRACE("workthread no(%d), I got a realtime job. fetch delay:%u, excuted: %lu\n", me->nThreadNo, microseconds, me->nRealtimeCount);
 
 			ATP_STAT next = stat_suspend;
 
-			if (job_data) {
-				job_data->priority = atp_realtime;
-				job_data->threadNo = me->nThreadNo;
+			if (me->atp_realtime_data) {
+				me->atp_realtime_data->priority = atp_realtime;
+				me->atp_realtime_data->threadNo = me->nThreadNo;
 			}
 			if (me->atp_realtime_func)
-				next = me->atp_realtime_func(job_data);
+				next = me->atp_realtime_func(me->atp_realtime_data);
 			// 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
-			free(job_data);
+			free(me->atp_realtime_data);
+			me->atp_realtime_data = NULL;
 
-			TRACE("workthread no(%d), I finished a realtime job. excuted: %lu, next: %d\n", me->nThreadNo, me->nExecuteCount, next);
+			gettimeofday(&me->endWorktime, NULL);
+			seconds = me->endWorktime.tv_sec - me->beginWorktime.tv_sec;
+			microseconds = (me->endWorktime.tv_usec - me->beginWorktime.tv_usec + (seconds * 1e+6))/1000; // for milliseconds
+			me->sumRealtimeWorkingtime += microseconds;
+			if (me->mostLongtimeRealtime < microseconds)
+				me->mostLongtimeRealtime = microseconds;
+
+			TRACE("workthread no(%d), I finished a realtime job. elapsed:%u excuted: %lu, next: %d\n", me->nThreadNo, microseconds, me->nRealtimeCount, next);
 
 			me->nThreadStat = next;
 
 		} else if (g_nextNormal) {
-			PATP_DATA job_data = g_nextNormal;
+			me->atp_normal_data = g_nextNormal;
 			g_nextNormal = NULL;		// 비워주어야 관리쓰레드가 다음 작업을 의뢰한다
 			me->nThreadStat = stat_run;
-			gettimeofday(&timenow, NULL);
-			seconds = timenow.tv_sec - g_requestWorktime.tv_sec;
-			microseconds = timenow.tv_usec - g_requestWorktime.tv_usec + (seconds * 1e+6);
+			gettimeofday(&me->beginWorktime, NULL);
+			seconds = me->beginWorktime.tv_sec - g_requestWorktime.tv_sec;
+			microseconds = me->beginWorktime.tv_usec - g_requestWorktime.tv_usec + (seconds * 1e+6);
 #if 0
 			g_requestWorkDelay = microseconds; // 현재의 지연시간이 향후 지연시간이 될 가능성도 많다, 그러나 전체를 보면 평균이 나을것이다
 #else
@@ -353,21 +360,29 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			me->nExecuteCount++;
+			me->nNormalCount++;
 			TRACE("workthread no(%d), I got a normal job. fetch delay:%u, (real queue size = %lu, normal = %lu)\n"
 				, me->nThreadNo, microseconds, g_queueRealtime.size(), g_queueNormal.size());
 
 			ATP_STAT next = stat_suspend;
-			if (job_data) {
-				job_data->priority = atp_normal;
-				job_data->threadNo = me->nThreadNo;
+			if (me->atp_normal_data) {
+				me->atp_normal_data->priority = atp_normal;
+				me->atp_normal_data->threadNo = me->nThreadNo;
 			}
 			if (me->atp_normal_func)
-				next = me->atp_normal_func(job_data);
+				next = me->atp_normal_func(me->atp_normal_data);
 			// 작업이 주어질때 마다 새로 할당 되므로 반드시 지워 준다
-			free(job_data);
+			free(me->atp_normal_data);
+			me->atp_normal_data = NULL;
 
-			TRACE("workthread no(%d), I finished a normal job.\n", me->nThreadNo);
+			gettimeofday(&me->endWorktime, NULL);
+			seconds = me->endWorktime.tv_sec - me->beginWorktime.tv_sec;
+			microseconds = (me->endWorktime.tv_usec - me->beginWorktime.tv_usec + (seconds * 1e+6)) / 1000; // for milliseconds
+			me->sumNormalWorkingtime += microseconds;
+			if (me->mostLongtimeNormal < microseconds)
+				me->mostLongtimeNormal = microseconds;
+
+			TRACE("workthread no(%d), I finished a normal job. elapsed:%u excuted: %lu, next: %d\n", me->nThreadNo, microseconds, me->nNormalCount, next);
 
 			me->nThreadStat = next;
 		} else {
@@ -451,6 +466,8 @@ int atp_destroy(ATP_END endcode, bool use_exit_func, useconds_t endwaittime)
 	// 작업의뢰 큐의 나머지 청소, 청소하지 않으면 다시 쓰레드 생성할 때 이전에 의뢰한 작업이 먼저 실행된다.
 	while (g_queueRealtime.size()) { free(g_queueRealtime.front()); g_queueRealtime.pop(); }
 	while (g_queueNormal.size()) { free(g_queueNormal.front()); g_queueNormal.pop(); }
+	
+	pthread_mutex_lock(&hMutex); // 데이타포인트 작업을 하려면 뮤텍스락을 걸어야 안전하다
 	if (g_nextRealtime) {
 		free(g_nextRealtime);
 		g_nextRealtime = 0;
@@ -459,6 +476,7 @@ int atp_destroy(ATP_END endcode, bool use_exit_func, useconds_t endwaittime)
 		free(g_nextNormal);
 		g_nextNormal = 0;
 	}
+	pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 	// endcode == gracefully 인 경우는 모든 큐 비우고 이 루틴 탄다
 	g_mainThread_use_exit_func = use_exit_func;

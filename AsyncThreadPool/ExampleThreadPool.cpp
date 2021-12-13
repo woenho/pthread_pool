@@ -82,11 +82,15 @@ ATP_STAT exit_func(PATP_DATA param)
 
 int main(int argc, char* argv[])
 {
-	TRACE("--- AsyncThreadPool library test\n");
+	TRACE("--- thread pool basic test ---\n");
 
 	size_t data_size = 1024;
 	PATP_DATA atpdata;
 	int nIndx, next;
+	PTHREADINFO pThread;
+	ATP_END end = argc > 1 ? atoi(argv[1]) ? gracefully : force : gracefully;
+	bool exit = argc > 2 ? atoi(argv[2]) ? true : false : false;
+
 
 	atp_create(3, test);
 
@@ -147,18 +151,17 @@ int main(int argc, char* argv[])
 
 	//sleep(2);
 
-	PTHREADINFO pThread = atp_getThreadInfo();
-	TRACE("--- request thread end...\n");
+	
+	TRACE("--- thread pool terminate ---\n");
 	TRACE("--- thread realtime queue_size(%d), normal queue_size(%d)\n", atp_getRealtimeQueueCount(), atp_getNormalQueueCount());
 	TRACE("-------------------------------------------\n");
+	pThread = atp_getThreadInfo();
 	for (nIndx = 0; nIndx < atp_getThreadCount(); nIndx++) {
-		TRACE("--- thread no=%d, executed=%lu\n", pThread[nIndx].nThreadNo, pThread[nIndx].nExecuteCount);
+		TRACE("--- thread no=%d, realtime executed=%lu, normal excuted=%lu\n"
+			, pThread[nIndx].nThreadNo, pThread[nIndx].nRealtimeCount, pThread[nIndx].nNormalCount);
 	}
 	TRACE("-------------------------------------------\n");
 
-
-	ATP_END end = argc > 1 ? atoi(argv[1]) ? gracefully : force : gracefully;
-	bool exit = argc > 2 ? atoi(argv[2]) ? true : false : false;
 
 	TRACE("--- endcode(%s) exit_func(%s)\n", end == gracefully ? "gracefully" : "force", exit ? "true" : "fale");
 	
@@ -176,8 +179,28 @@ int main(int argc, char* argv[])
 
 	atp_destroy(end, exit);
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	// -------------------------
-	TRACE("================ work thread lock test =========\n");
+	TRACE("--- thread pool lock test ---\n");
 	// -------------------------
 	// 
 
@@ -191,11 +214,20 @@ int main(int argc, char* argv[])
 		else
 			atpdata->func = lock2;
 		atp_addQueue(atpdata);
+		TRACE("++++++++++++++++++++ thread add real Queue successed %d \n", nIndx);
 	}
 
 	sleep(7);
 
-	TRACE("================ thread pool terminate =========\n");
+	TRACE("--- thread pool terminate ---\n");
+	TRACE("--- thread realtime queue_size(%d), normal queue_size(%d)\n", atp_getRealtimeQueueCount(), atp_getNormalQueueCount());
+	TRACE("-------------------------------------------\n");
+	pThread = atp_getThreadInfo();
+	for (nIndx = 0; nIndx < atp_getThreadCount(); nIndx++) {
+		TRACE("--- thread no=%d, realtime executed=%lu, normal excuted=%lu\n"
+			, pThread[nIndx].nThreadNo, pThread[nIndx].nRealtimeCount, pThread[nIndx].nNormalCount);
+	}
+	TRACE("-------------------------------------------\n");
 
 	atp_destroy(end, exit);
 

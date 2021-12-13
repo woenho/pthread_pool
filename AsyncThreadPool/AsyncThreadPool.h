@@ -53,39 +53,41 @@ typedef ATP_STAT(*ThreadFunction)(ATP_DATA_T*);
 // 워크쓰레드가 사용자함수를 호출할 때 인자로 넘겨주는 데이타형식, 사용자 함수에서 몇 번째 워크쓰레드에서 동작하는지 알 수 있게 쓰레드 번호 추가 
 typedef struct ATP_DATA_T { ThreadFunction func; ATP_PRIORITY priority; int threadNo, s_len; char s[]; } ATP_DATA, * PATP_DATA;
 
-// ATP_DATA 를 사용할 때 이 함수로 메모리를 생성한다. 삭제는 자료의성격에 따라서 자동으로 진행된다
-// stat_run으로 호출되는 함수가 상황에 따라 다른 함수를 호출 하고 싶으면 ATP_DATA::func 에 함수를 설정한다
-inline PATP_DATA atp_alloc(size_t data_size) {
-	size_t allocsize = data_size + sizeof(ATP_DATA) - sizeof(char); // sizeof(char) == ATP_DATA::s
-	PATP_DATA atp = (PATP_DATA)malloc(allocsize);
-	if (atp) { bzero(atp, allocsize); atp->s_len = data_size; }
-	return atp;
-};
-
 // 워크쓰레드 정보 구조체
 typedef struct _THREADINFO
 {
 	// thread base info
-	int				nThreadNo;		// 쓰레드 고유일련번호
-	pthread_t		threadID;		// 쓰레드 아이디
-	pthread_attr_t	stAttr;			// 쓰레드 속성
+	int				nThreadNo;			// 쓰레드 고유일련번호
+	pthread_t		threadID;			// 쓰레드 아이디
+	pthread_attr_t	stAttr;				// 쓰레드 속성
 
-	ATP_STAT		nThreadStat;	// 쓰레드의 현재 상태 (워크쓰레드가 생성된 후 최초 상태는 stat_startup이다)
-	size_t			nExecuteCount;	// 쓰레드가 stat_run 모드로 실행한 건수
-	int				nExitCode;		// 쓰레드 종료시 종료코드
-	struct timespec waittime;		// 각 쓰레드 마다 스스로 깨어날 시간을 지정한다 (default 3초)
+	ATP_STAT		nThreadStat;		// 쓰레드의 현재 상태 (워크쓰레드가 생성된 후 최초 상태는 stat_startup이다)
+	int				nExitCode;			// 쓰레드 종료시 종료코드
+	struct timespec waittime;			// 각 쓰레드 마다 스스로 깨어날 시간을 지정한다 (default 3초)
 
 	// thread function
-	ThreadFunction	atp_realtime_func;	// 실시간 수행 잡을 처리할 함수
-	ThreadFunction	atp_normal_func;	// 낮은 순위의 잡을 처라할 함수(대부분 atp_realtime_func 와 같은 함수일 가능성이 크다)
+	ThreadFunction	atp_realtime_func;	// 실시간 처리 요청을 수행할 함수
+	PATP_DATA		atp_realtime_data;	// 실시간 job에 넘겨줄 데이타 구조체
+	ThreadFunction	atp_normal_func;	// 낮은순위의 처리요청을 수행할 함수(대부분 atp_realtime_func 와 같은 함수일 가능성이 크다)
+	PATP_DATA		atp_normal_data;	// 낮은순위 job 에 넘겨줄 데이타 구조체
 	ThreadFunction	atp_idle_func;		// 쉬고 있을 때 수행 할일
 	PATP_DATA		atp_idle_data;		// 쉬고있을 대 수행잡이 참고할 데이타 구조
 	ThreadFunction	atp_exit_func;		// 메인쓰레드가 설정한 상태가 stat_exit 인 경우 실행할 함수. atp_setfunc() 로 설정
 	PATP_DATA		atp_exit_data;		// 메인쓰레드가 설정한 상태가 상태가 stat_exit 인 경우 실행할 정보( 쓰레드 종료할 때 free()한다. atp_setfunc() 로 설정)
 
+	// 쓰레드 통계
+	size_t			nRealtimeCount;		// 쓰레드가 realtime 요청을 실행한 건수
+	size_t			nNormalCount;		// 쓰레드가 normal 요청을 실행한 건수
+	struct timeval	beginWorktime;		// 마지막 수행한 잡의 수행 시작 시각
+	struct timeval	endWorktime;		// 마지막 수행한 잡의 수행 종료 시각
+	size_t			sumRealtimeWorkingtime;	// realtime 수행 시간의 합 (milliseconds)
+	size_t			sumNormalWorkingtime;	// Normal 수행 시간의 합 (milliseconds)
+	suseconds_t		mostLongtimeRealtime;	// milliseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
+	suseconds_t		mostLongtimeNormal;	// milliseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
+
 	// 외부연결이 필요한 경우 (예약)
-	bool			keepsession;	// tcp 경우 세션유지가 필요한가?
-	int				protocol;		// tcp or udp
+	bool			keepsession;		// tcp 경우 세션유지가 필요한가?
+	int				protocol;			// tcp or udp
 	char			host[64];
 	unsigned short	port;
 
@@ -96,9 +98,18 @@ typedef struct _THREADINFO
 
 } THREADINFO, *PTHREADINFO;
 
+// ATP_DATA 를 사용할 때 이 함수로 메모리를 생성한다. 삭제는 자료의성격에 따라서 자동으로 진행된다
+// 호출되는 함수가 상황에 따라 다른 함수를 호출 하고 싶으면 ATP_DATA::func 에 해당함수를 설정한다
+inline PATP_DATA atp_alloc(size_t data_size) {
+	size_t allocsize = data_size + sizeof(ATP_DATA); // sizeof(ATP_DATA::s) == 0,  (char s[] == char s[0])
+	PATP_DATA atp = (PATP_DATA)malloc(allocsize);
+	if (atp) { bzero(atp, allocsize); atp->s_len = data_size; }
+	return atp;
+};
+
 // AsyncThreadPool 을 이용하는 기본적인 함수들
 int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal=NULL, pthread_attr_t* stAttr=NULL);
-int atp_destroy(ATP_END endcode, bool use_exit_func=false, useconds_t endwaittime=5000000U);
+int atp_destroy(ATP_END endcode, bool use_exit_func=false, useconds_t endwaittime=5000000U); // default wait 5 seconds
 	
 // atp_addQueue() 는 정상 작동하면 0 을 리턴한다. 큐를 추가하지 못했으면 -1 을 리턴한다
 int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority=atp_realtime);
@@ -122,6 +133,21 @@ int atp_getNormalQueueCount(); // 여유시간작업의뢰 큐 갯수를 리턴�
 int atp_worklock();		// 작업쓰레드간에 동기화를 위한 락이 필요한 경우
 int atp_workunlock();	// 작업쓰레드간에 동기화를 위한 락이 필요한 경우
 unsigned int atp_getWorkLockCount();	// 작업쓰레드간에 동기화를 위한 락 대기열 숫자 조회
+
+// 통계
+inline size_t atp_getAverageRealtimeWorkingtime(int nThreadNo) {	// 평균 밀리초
+	if (nThreadNo < 0 || nThreadNo >= atp_getThreadCount())
+		return -1;
+	PTHREADINFO info = atp_getThreadInfo();
+	return( info[nThreadNo].sumRealtimeWorkingtime / info[nThreadNo].nRealtimeCount );
+}
+
+inline size_t atp_getAverageNormalWorkingtime(int nThreadNo) {	// 평균 밀리초
+	if (nThreadNo < 0 || nThreadNo >= atp_getThreadCount())
+		return -1;
+	PTHREADINFO info = atp_getThreadInfo();
+	return(info[nThreadNo].sumNormalWorkingtime / info[nThreadNo].nNormalCount);
+}
 
 // -------------------------------------------
 
