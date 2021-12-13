@@ -147,7 +147,7 @@ inline size_t atp_getAverageNormalWorkingtime(int nThreadNo) {	// 평균 밀리�
 	if (nThreadNo < 0 || nThreadNo >= atp_getThreadCount())
 		return -1;
 	PTHREADINFO info = atp_getThreadInfo();
-	return(info[nThreadNo].nNormalCount ? info[nThreadNo].sumNormalWorkingtime / info[nThreadNo].nNormalCount / 0);
+	return(info[nThreadNo].nNormalCount ? info[nThreadNo].sumNormalWorkingtime / info[nThreadNo].nNormalCount : 0);
 }
 
 // -------------------------------------------

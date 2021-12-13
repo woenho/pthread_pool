@@ -93,26 +93,6 @@ int main(int argc, char* argv[])
 	ATP_END end = argc > 1 ? atoi(argv[1]) ? gracefully : force : gracefully;
 	bool exit = argc > 2 ? atoi(argv[2]) ? true : false : false;
 
-
-	atp_create(5, test);
-	TRACE("--- thread pool terminate ---\n");
-	TRACE("--- thread realtime queue_size(%d), normal queue_size(%d)\n", atp_getRealtimeQueueCount(), atp_getNormalQueueCount());
-#if defined(DEBUGTRACE)
-	TRACE("-------------------------------------------\n");
-	pThread = atp_getThreadInfo();
-	for (nIndx = 0; nIndx < atp_getThreadCount(); nIndx++) {
-		TRACE("threadno=% d, realtime execute=%lu average elapsed=%lu, normal execute=%lu average elapsed=%lu"
-			, pThread[nIndx].nThreadNo
-			, pThread[nIndx].nRealtimeCount, pThread[nIndx].nNormalCount
-			, atp_getAverageRealtimeWorkingtime(nIndx)	// 평균 작업소요 시간
-			, atp_getAverageNormalWorkingtime(nIndx) // 평균 작업소요 시간
-		);
-	}
-	TRACE("-------------------------------------------\n");
-#endif
-	atp_destroy(end, exit);
-
-
 	atp_create(3, test);
 
 	TRACE("--- timewait test 7 \n");
