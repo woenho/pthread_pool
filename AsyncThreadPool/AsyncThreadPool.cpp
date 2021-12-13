@@ -129,7 +129,7 @@ void* mainthread(void* param)
 	microseconds = 0;
 
 	if (g_mainThread_use_exit_func) {
-		// 종료할 때 워크쓰레드 사용자함수를 호출하고 종료하라고 요청을 받았다면
+		// 종료할 때 워크쓰레드 사용자함수를 호출 후 종료하라고 요청을 받았다면
 		TRACE("=== set exit signal to all work threads\n");
 		do {
 			usleep(500000); // 0.5 second 
@@ -169,7 +169,7 @@ void* mainthread(void* param)
 	char* szThreadStatus = (char*)malloc(g_nThreadCount);
 	bzero(szThreadStatus, g_nThreadCount);
 
-	// 모든 워크쓰레드가 정상종료 되었는지 최대 10회 검증한다, 최대 5초 소요 후 강제 종료
+	// 모든 워크쓰레드가 정상종료 되었는지 검증한다, 최대 g_endwaittime 만큼 기다린다
 	TRACE("=== check exited all work threads endwait time(%d)\n", g_endwaittime);
 
 	do
@@ -228,7 +228,7 @@ void* mainthread(void* param)
 	free(g_thread);
 	g_thread = NULL;
 
-	// thread pool table space free
+	// thread count reset
 	g_nThreadCount = 0;
 
 	// 관리쓰레드 명시적 종료
