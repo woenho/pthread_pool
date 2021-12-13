@@ -161,8 +161,9 @@ int main(int argc, char* argv[])
 	for (nIndx = 0; nIndx < atp_getThreadCount(); nIndx++) {
 		TRACE("threadno=% d, realtime execute=%lu average elapsed=%lu, normal execute=%lu average elapsed=%lu\n"
 			, pThread[nIndx].nThreadNo
-			, pThread[nIndx].nRealtimeCount, pThread[nIndx].nNormalCount
+			, pThread[nIndx].nRealtimeCount
 			, atp_getAverageRealtimeWorkingtime(nIndx)	// 평균 작업소요 시간
+			, pThread[nIndx].nNormalCount
 			, atp_getAverageNormalWorkingtime(nIndx) // 평균 작업소요 시간
 		);
 	}
@@ -234,8 +235,9 @@ int main(int argc, char* argv[])
 	for (nIndx = 0; nIndx < atp_getThreadCount(); nIndx++) {
 		TRACE("threadno=% d, realtime execute=%lu average elapsed=%lu, normal execute=%lu average elapsed=%lu\n"
 			, pThread[nIndx].nThreadNo
-			, pThread[nIndx].nRealtimeCount, pThread[nIndx].nNormalCount
+			, pThread[nIndx].nRealtimeCount
 			, atp_getAverageRealtimeWorkingtime(nIndx)	// 평균 작업소요 시간
+			, pThread[nIndx].nNormalCount
 			, atp_getAverageNormalWorkingtime(nIndx) // 평균 작업소요 시간
 		);
 	}

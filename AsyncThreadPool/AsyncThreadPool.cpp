@@ -319,7 +319,6 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			me->nRealtimeCount++;
 			TRACE("workthread no(%d), I got a realtime job. fetch delay:%u, excuted: %lu\n", me->nThreadNo, microseconds, me->nRealtimeCount);
 
 			ATP_STAT next = stat_suspend;
@@ -334,6 +333,7 @@ void* workthread(void* param)
 			free(me->atp_realtime_data);
 			me->atp_realtime_data = NULL;
 
+			me->nRealtimeCount++;
 			gettimeofday(&me->endWorktime, NULL);
 			seconds = me->endWorktime.tv_sec - me->beginWorktime.tv_sec;
 			microseconds = (me->endWorktime.tv_usec - me->beginWorktime.tv_usec + (seconds * 1e+6))/1000; // for milliseconds
@@ -360,7 +360,6 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			me->nNormalCount++;
 			TRACE("workthread no(%d), I got a normal job. fetch delay:%u, (real queue size = %lu, normal = %lu)\n"
 				, me->nThreadNo, microseconds, g_queueRealtime.size(), g_queueNormal.size());
 
@@ -375,6 +374,7 @@ void* workthread(void* param)
 			free(me->atp_normal_data);
 			me->atp_normal_data = NULL;
 
+			me->nNormalCount++;
 			gettimeofday(&me->endWorktime, NULL);
 			seconds = me->endWorktime.tv_sec - me->beginWorktime.tv_sec;
 			microseconds = (me->endWorktime.tv_usec - me->beginWorktime.tv_usec + (seconds * 1e+6)) / 1000; // for milliseconds
