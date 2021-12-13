@@ -140,14 +140,14 @@ inline size_t atp_getAverageRealtimeWorkingtime(int nThreadNo) {	// 평균 밀�
 	if (nThreadNo < 0 || nThreadNo >= atp_getThreadCount())
 		return -1;
 	PTHREADINFO info = atp_getThreadInfo();
-	return( info[nThreadNo].sumRealtimeWorkingtime / info[nThreadNo].nRealtimeCount );
+	return(info[nThreadNo].nRealtimeCount ? info[nThreadNo].sumRealtimeWorkingtime / info[nThreadNo].nRealtimeCount : 0);
 }
 
 inline size_t atp_getAverageNormalWorkingtime(int nThreadNo) {	// 평균 밀리초
 	if (nThreadNo < 0 || nThreadNo >= atp_getThreadCount())
 		return -1;
 	PTHREADINFO info = atp_getThreadInfo();
-	return(info[nThreadNo].sumNormalWorkingtime / info[nThreadNo].nNormalCount);
+	return(info[nThreadNo].nNormalCount ? info[nThreadNo].sumNormalWorkingtime / info[nThreadNo].nNormalCount / 0);
 }
 
 // -------------------------------------------
