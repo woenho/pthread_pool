@@ -1,6 +1,14 @@
 
 #include "AsyncThreadPool.h"
 
+/*
+* programming. woenho@daum.net
+* on. 2021-12-20
+* for. anybody
+* using. free
+* pay. comment to me
+*/
+
 using namespace std;
 
 // 선언과 함께 초기화 { PTHREAD_MUTEX_INITIALIZER or pthread_mutex_init(&mutex,NULL); }
@@ -422,7 +430,8 @@ int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal,
 	g_workThread_run = 1;	// 쓰레드 생성전에 설정해야한다. 값이 0이면 쓰레드 만들자 마자 종료한다
 
 	// 워크쓰레드 생성
-	for (int i = 0; i < g_nThreadCount; i++) {
+    int i;
+	for (i = 0; i < g_nThreadCount; i++) {
 		g_thread[i].nThreadNo = i;
 		g_thread[i].nThreadStat = stat_suspend;
 		g_thread[i].atp_realtime_func = realtime;
