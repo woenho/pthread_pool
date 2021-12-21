@@ -186,24 +186,23 @@ void* mainthread(void* param)
 		nCheckExit = 0;
 		for (i = 0; i < g_nThreadCount; i++) {
 			// 일하는 쓰레드 가 있으면 일이 종료될 때를 기다린다
-			if (szThreadStatus[i] || g_thread[i].nThreadStat >= stat_exit) {
-				if (!szThreadStatus[i]) {
-					szThreadStatus[i] = '9';
-				}
+			if (szThreadStatus[i]) {
 				nCheckExit++;
-			}
-			else {
-				clock_gettime(CLOCK_MONOTONIC, &timenow);
-				seconds = timenow.tv_sec - g_thread[i].beginWorktime.tv_sec;
-				nanoseconds = timenow.tv_nsec - g_thread[i].beginWorktime.tv_nsec + (seconds * 1e+9);
-				if (nanoseconds >= g_endwaittime) {
-					if (!szThreadStatus[i]) {
+			} else {
+				if (g_thread[i].nThreadStat >= stat_exit) {
+					szThreadStatus[i] = '9';
+					nCheckExit++;
+				} else {
+					clock_gettime(CLOCK_MONOTONIC, &timenow);
+					seconds = timenow.tv_sec - g_thread[i].beginWorktime.tv_sec;
+					nanoseconds = timenow.tv_nsec - g_thread[i].beginWorktime.tv_nsec + (seconds * 1e+9);
+					if (nanoseconds >= g_endwaittime) {
 						TRACE("=== thread no(%d), need force exit check %.6f / %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
 						szThreadStatus[i] = '9';
 						nCheckExit++;
+					} else {
+						TRACE("=== thread no(%d), elapsed time %.6f seconds, waittime %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
 					}
-				} else {
-					TRACE("=== thread no(%d), elapsed time %.6f seconds, waittime %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
 				}
 			}
 		}
@@ -301,7 +300,7 @@ void* workthread(void* param)
 			if (me->atp_exit_func)
 				me->nExitCode = me->atp_exit_func(me->atp_exit_data);
 			else
-				me->nExitCode = 0;
+				me->nExitCode = 9; // stat_exit 상태확인 하고 종료함
 
 			me->nThreadStat = stat_exited;
 			
