@@ -1,6 +1,3 @@
-
-#include "AsyncThreadPool.h"
-
 /*
 * programming. woenho@daum.net
 * on. 2021-12-20
@@ -8,6 +5,8 @@
 * using. free
 * pay. comment to me
 */
+
+#include "AsyncThreadPool.h"
 
 using namespace std;
 
@@ -20,7 +19,7 @@ pthread_cond_t	hEvent;			// 쓰레드 깨움 이벤트시그널
 static int g_mainThread_run = 0; // 0으로 설정하면 관리 쓰레드 종료한다
 static int g_workThread_run = 0; // 0으로 설정하면 work 쓰레드 종료한다
 static int g_mainThread_use_exit_func; // 1로 설정하면 모든 워크 쓰레드에 atp_exit_func 를 호출하고 종료하게 한다
-useconds_t g_endwaittime;	// 쓰레드풀 종료 시 작업하고있는 쓰레드를 기다릴 쵀대 시간을 지정한다
+time_t g_endwaittime;	// 쓰레드풀 종료 시 작업하고있는 쓰레드를 기다릴 쵀대 시간을 지정한다
 
 PTHREADINFO g_thread;		// 워크쓰레드관리 테이블 포인트
 static int g_nThreadCount;	// 워크쓰레드 수
@@ -34,13 +33,14 @@ PATP_DATA g_nextNormal = NULL; // 워크쓰레드가 깨어나서 할 일의 데
 
 unsigned int g_mutexWorkCount;
 
-useconds_t g_requestWorkDelay;	// 워크쓰레드에 작업의뢰를 한 후 실제 작업쓰레드가 작업을 시작까지 걸리는 시간 (자동계산)
-struct timeval g_requestWorktime;	// 메인쓰레드가 작업의뢰시 설정하고 작업을 시작하는 워크 쓰레드가 이 시각과의 차이를 g_requestWorkDelay 에 반영한다(자동)
+time_t g_requestWorkDelay;	// 워크쓰레드에 작업의뢰를 한 후 실제 작업쓰레드가 작업을 시작까지 걸리는 시간 (자동계산)
+struct timespec g_requestWorktime;	// 메인쓰레드가 작업의뢰시 설정하고 작업을 시작하는 워크 쓰레드가 이 시각과의 차이를 g_requestWorkDelay 에 반영한다(자동)
 
 // ------------ function -----------------
 
 // 실험결과 usleep은 정확한 마이크로시간 동안 슬립하지 않는다.
 // 그래서 select를 이용함 함수를 만들었다. usleep과 별차이가 없넹... 흐미!
+// select 가 나노초를 안쓴다 예전 마이크로초 ㅋㅋ
 inline void SleepUSec(useconds_t a_nUSec)
 {
 	struct timeval stTimeVal;
@@ -70,10 +70,10 @@ void* mainthread(void* param)
 	int i;
 	int nCheckExit;
 	bool bRequested;
+	struct timespec timenow;
 	useconds_t waittime = 0;
-	struct timeval timenow;
-	useconds_t seconds = 0;
-	useconds_t microseconds = 0;
+	time_t seconds = 0;
+	time_t nanoseconds = 0;
 
 	g_requestWorkDelay = 0; // 최초 시작은 0으로
 	g_mainThread_use_exit_func = 0;
@@ -93,34 +93,34 @@ void* mainthread(void* param)
 					if (!g_nextRealtime) {
 						g_nextRealtime = g_queueRealtime.front();
 						g_queueRealtime.pop();
-						gettimeofday(&g_requestWorktime, (struct timezone*)NULL);	// 작업의뢰시각 기록
+						clock_gettime(CLOCK_MONOTONIC, &g_requestWorktime); // 작업의뢰시각 기록, NTP영향없다
 						pthread_cond_signal(&hEvent);
 						bRequested = true;
-						TRACE("mainthread. request a realtime job, avrage fetch delay:%u\n", g_requestWorkDelay);
+						TRACE("mainthread. request a realtime job, avrage fetch delay:%.6f\n", g_requestWorkDelay / 1e+9);
 					}
 				} else {
 					// 리얼타임 우선순위의 잡이 없다면
 					if (!g_nextNormal && g_queueNormal.size()) {
 						g_nextNormal = g_queueNormal.front();
 						g_queueNormal.pop();
-						gettimeofday(&g_requestWorktime, (struct timezone*)NULL);	// 작업의뢰시각 기록
+						clock_gettime(CLOCK_MONOTONIC, &g_requestWorktime); // 작업의뢰시각 기록, NTP영향없다
 						pthread_cond_signal(&hEvent);
 						bRequested = true;
-						TRACE("mainthread. request a normal job, delay:%u\n", g_requestWorkDelay);
+						TRACE("mainthread. request a normal job, delay:%.6f\n", g_requestWorkDelay / 1e+9);
 					}
 				}
 				
 				if (bRequested) {
 					// 처리했다면 워크쓰레드가 작업을 받아가는 평균 시간 만큼 기다리자
 					// 처리하지 못했다면 노는 쓰레드가 없다. 좀 쉬었다가 다음 처리하자
-					waittime = g_requestWorkDelay;
+					waittime = g_requestWorkDelay / 1e+3; // for micro secons
 				} else if (g_nextRealtime|| g_nextNormal) {
 					// 앞전에 시그널를 보냈는데 쉬는 쓰레드가 없었다면 이리 온다... 다시 시그널을 보내자
 					pthread_cond_signal(&hEvent);
-					gettimeofday(&timenow, NULL);
+					clock_gettime(CLOCK_MONOTONIC, &timenow); // 작업의뢰지연시각구하기, NTP영향없다
 					seconds = timenow.tv_sec - g_requestWorktime.tv_sec;
-					microseconds = timenow.tv_usec - g_requestWorktime.tv_usec + (seconds * 1e+6);
-					TRACE("mainthread. monitoring requested a job, elapsed:%u\n", microseconds); // 워크쓰레드가 작업을 받아가는 시간이 평균시간 보다 더 오래 걸리고 있는 상황
+					nanoseconds = timenow.tv_nsec - g_requestWorktime.tv_nsec + (seconds * 1e+9);
+					TRACE("mainthread. monitoring requested a job, elapsed:%.6f\n", nanoseconds / 1e+9); // 워크쓰레드가 작업을 받아가는 시간이 평균시간 보다 더 오래 걸리고 있는 상황
 				}
 				pthread_mutex_unlock(&hMutex);
 			}
@@ -134,14 +134,14 @@ void* mainthread(void* param)
 	// 만일 아직 남은 잡이 있다면 모든 쓰레드가 깨어나 나머지 일을 해야한다
 	pthread_cond_broadcast(&hEvent);
 
-	microseconds = 0;
+	nanoseconds = 0;
 
 	if (g_mainThread_use_exit_func) {
 		// 종료할 때 워크쓰레드 사용자함수를 호출 후 종료하라고 요청을 받았다면
 		TRACE("=== set exit signal to all work threads\n");
 		do {
 			usleep(500000); // 0.5 second 
-			microseconds += 500000;
+			nanoseconds += 5e+8;
 
 			nCheckExit = 0;
 			// 시그널 보내기 전에 반드시 락을 건다... 걍 하면 이미 쓰레드가 실행 중 일 수 있다
@@ -163,7 +163,7 @@ void* mainthread(void* param)
 				pthread_cond_broadcast(&hEvent);
 				pthread_mutex_unlock(&hMutex);
 			}
-		} while (nCheckExit < g_nThreadCount && microseconds <= g_endwaittime);
+		} while (nCheckExit < g_nThreadCount && nanoseconds <= g_endwaittime);
 		// 실행유지플래그(g_workThread_run)를 끈다
 		g_workThread_run = 0;
 	} else {
@@ -178,7 +178,7 @@ void* mainthread(void* param)
 	bzero(szThreadStatus, g_nThreadCount);
 
 	// 모든 워크쓰레드가 정상종료 되었는지 검증한다, 최대 g_endwaittime 만큼 기다린다
-	TRACE("=== check exited all work threads endwait time(%d)\n", g_endwaittime);
+	TRACE("=== check exited all work threads endwait seconds(%.6f)\n", g_endwaittime / 1e+9);
 
 	do
 	{
@@ -193,17 +193,17 @@ void* mainthread(void* param)
 				nCheckExit++;
 			}
 			else {
-				gettimeofday(&timenow, NULL);
+				clock_gettime(CLOCK_MONOTONIC, &timenow);
 				seconds = timenow.tv_sec - g_thread[i].beginWorktime.tv_sec;
-				microseconds = timenow.tv_usec - g_thread[i].beginWorktime.tv_usec + (seconds * 1e+6);
-				if (microseconds >= g_endwaittime) {
+				nanoseconds = timenow.tv_nsec - g_thread[i].beginWorktime.tv_nsec + (seconds * 1e+9);
+				if (nanoseconds >= g_endwaittime) {
 					if (!szThreadStatus[i]) {
-						TRACE("=== thread no(%d), need force exit check %d / %d\n", g_thread[i].nThreadNo, microseconds / 1000, g_endwaittime / 1000);
+						TRACE("=== thread no(%d), need force exit check %.6f / %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
 						szThreadStatus[i] = '9';
 						nCheckExit++;
 					}
 				} else {
-					TRACE("=== thread no(%d), elapsed time %d milliseconds, waittime %d\n", g_thread[i].nThreadNo, microseconds / 1000, g_endwaittime / 1000);
+					TRACE("=== thread no(%d), elapsed time %.6f seconds, waittime %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
 				}
 			}
 		}
@@ -217,10 +217,10 @@ void* mainthread(void* param)
 		if (g_thread[i].nThreadStat == stat_exited) {
 			TRACE("=== thread no(%d), exited check ok!\n", g_thread[i].nThreadNo);
 		} else {
-			gettimeofday(&timenow, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &timenow);
 			seconds = timenow.tv_sec - g_thread[i].beginWorktime.tv_sec;
-			microseconds = timenow.tv_usec - g_thread[i].beginWorktime.tv_usec + (seconds * 1e+6);
-			TRACE("=== thread no(%d), still running. force kill. run time(%d milisecond)\n", g_thread[i].nThreadNo, microseconds / 1000);
+			nanoseconds = timenow.tv_nsec - g_thread[i].beginWorktime.tv_nsec + (seconds * 1e+9);
+			TRACE("=== thread no(%d), still running. force kill. run time(%.6f second)\n", g_thread[i].nThreadNo, nanoseconds / 1e+9);
 			pthread_cancel(g_thread[i].threadID);
 		}
 	}
@@ -249,9 +249,9 @@ void* workthread(void* param)
 	PTHREADINFO me = (PTHREADINFO)param;
 	int nStat;
 	struct timespec waittime;
-	struct timeval timenow;
-	useconds_t seconds = 0;
-	useconds_t microseconds = 0;
+	struct timespec timenow;
+	time_t seconds = 0;
+	time_t nanoseconds = 0;
 
 	while (g_workThread_run) {
 
@@ -263,9 +263,9 @@ void* workthread(void* param)
 		// 깨어나면 락을 자기가 가지고 있으므로 락을 가지고 할일만 하고 락을 풀어 주어야 해야한다
 		if (me->nThreadStat < stat_exit) {
 			pthread_mutex_lock(&hMutex);
-			gettimeofday(&timenow, NULL);
+			clock_gettime(CLOCK_REALTIME, &timenow);	// NTP영향받아야 함
 			waittime.tv_sec = timenow.tv_sec + me->waittime.tv_sec;
-			waittime.tv_nsec = timenow.tv_usec + me->waittime.tv_nsec;
+			waittime.tv_nsec = timenow.tv_nsec + me->waittime.tv_nsec;
 			nStat = pthread_cond_timedwait(&hEvent, &hMutex, &waittime);
 		}
 
@@ -316,18 +316,18 @@ void* workthread(void* param)
 			me->atp_realtime_data = g_nextRealtime;
 			g_nextRealtime = NULL;		// 비워주어야 관리쓰레드가 다음 작업을 의뢰한다
 			me->nThreadStat = stat_run;
-			gettimeofday(&me->beginWorktime, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &me->beginWorktime); // NTP영향 받으면 안됨
 			seconds = me->beginWorktime.tv_sec - g_requestWorktime.tv_sec;
-			microseconds = me->beginWorktime.tv_usec - g_requestWorktime.tv_usec + (seconds * 1e+6);
+			nanoseconds = me->beginWorktime.tv_nsec - g_requestWorktime.tv_nsec + (seconds * 1e+9);
 #if 0
-			g_requestWorkDelay = microseconds; // 현재의 지연시간이 향후 지연시간이 될 가능성도 많다, 그러나 전체를 보면 평균이 나을것이다
+			g_requestWorkDelay = nanooseconds; // 현재의 지연시간이 향후 지연시간이 될 가능성도 많다, 그러나 전체를 보면 평균이 나을것이다
 #else
-			g_requestWorkDelay = (microseconds + g_requestWorkDelay) / 2; // 기존 지연시간과의 평균값으로 자동 조정한다
+			g_requestWorkDelay = (nanoseconds + g_requestWorkDelay) / 2; // 기존 지연시간과의 평균값으로 자동 조정한다
 #endif
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			TRACE("workthread no(%d), I got a realtime job. fetch delay:%u, excuted: %lu\n", me->nThreadNo, microseconds, me->nRealtimeCount);
+			TRACE("workthread no(%d), I got a realtime job. fetch delay:%.6f, excuted: %lu\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount);
 
 			ATP_STAT next = stat_suspend;
 
@@ -342,14 +342,14 @@ void* workthread(void* param)
 			me->atp_realtime_data = NULL;
 
 			me->nRealtimeCount++;
-			gettimeofday(&me->endWorktime, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &me->endWorktime); // NTP영향 받으면 안됨
 			seconds = me->endWorktime.tv_sec - me->beginWorktime.tv_sec;
-			microseconds = (me->endWorktime.tv_usec - me->beginWorktime.tv_usec + (seconds * 1e+6))/1000; // for milliseconds
-			me->sumRealtimeWorkingtime += microseconds;
-			if (me->mostLongtimeRealtime < microseconds)
-				me->mostLongtimeRealtime = microseconds;
+			nanoseconds = me->endWorktime.tv_nsec - me->beginWorktime.tv_nsec + (seconds * 1e+9);
+			me->sumRealtimeWorkingtime += nanoseconds / 1e+6; // milli seconds
+			if (me->mostLongtimeRealtime < nanoseconds)
+				me->mostLongtimeRealtime = nanoseconds;
 
-			TRACE("workthread no(%d), I finished a realtime job. elapsed:%u excuted: %lu, next: %d\n", me->nThreadNo, microseconds, me->nRealtimeCount, next);
+			TRACE("workthread no(%d), I finished a realtime job. elapsed:%.6f excuted: %lu, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount, next);
 
 			me->nThreadStat = next;
 
@@ -357,19 +357,19 @@ void* workthread(void* param)
 			me->atp_normal_data = g_nextNormal;
 			g_nextNormal = NULL;		// 비워주어야 관리쓰레드가 다음 작업을 의뢰한다
 			me->nThreadStat = stat_run;
-			gettimeofday(&me->beginWorktime, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &me->beginWorktime); // NTP영향 받으면 안됨
 			seconds = me->beginWorktime.tv_sec - g_requestWorktime.tv_sec;
-			microseconds = me->beginWorktime.tv_usec - g_requestWorktime.tv_usec + (seconds * 1e+6);
+			nanoseconds = me->beginWorktime.tv_nsec - g_requestWorktime.tv_nsec + (seconds * 1e+9);
 #if 0
-			g_requestWorkDelay = microseconds; // 현재의 지연시간이 향후 지연시간이 될 가능성도 많다, 그러나 전체를 보면 평균이 나을것이다
+			g_requestWorkDelay = nanoseconds; // 현재의 지연시간이 향후 지연시간이 될 가능성도 많다, 그러나 전체를 보면 평균이 나을것이다
 #else
-			g_requestWorkDelay = (microseconds + g_requestWorkDelay) / 2; // 기존 지연시간과의 평균값으로 자동 조정한다
+			g_requestWorkDelay = (nanoseconds + g_requestWorkDelay) / 2; // 기존 지연시간과의 평균값으로 자동 조정한다
 #endif
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			TRACE("workthread no(%d), I got a normal job. fetch delay:%u, (real queue size = %lu, normal = %lu)\n"
-				, me->nThreadNo, microseconds, g_queueRealtime.size(), g_queueNormal.size());
+			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size = %lu, normal = %lu)\n"
+				, me->nThreadNo, nanoseconds / 1e+9, g_queueRealtime.size(), g_queueNormal.size());
 
 			ATP_STAT next = stat_suspend;
 			if (me->atp_normal_data) {
@@ -383,19 +383,21 @@ void* workthread(void* param)
 			me->atp_normal_data = NULL;
 
 			me->nNormalCount++;
-			gettimeofday(&me->endWorktime, NULL);
+			clock_gettime(CLOCK_MONOTONIC, &me->endWorktime); // NTP영향 받으면 안됨
 			seconds = me->endWorktime.tv_sec - me->beginWorktime.tv_sec;
-			microseconds = (me->endWorktime.tv_usec - me->beginWorktime.tv_usec + (seconds * 1e+6)) / 1000; // for milliseconds
-			me->sumNormalWorkingtime += microseconds;
-			if (me->mostLongtimeNormal < microseconds)
-				me->mostLongtimeNormal = microseconds;
+			nanoseconds = me->endWorktime.tv_nsec - me->beginWorktime.tv_nsec + (seconds * 1e+9);
+			me->sumNormalWorkingtime += nanoseconds / 1e+6; // milli seconds
+			if (me->mostLongtimeNormal < nanoseconds)
+				me->mostLongtimeNormal = nanoseconds;
 
-			TRACE("workthread no(%d), I finished a normal job. elapsed:%u excuted: %lu, next: %d\n", me->nThreadNo, microseconds, me->nNormalCount, next);
+			TRACE("workthread no(%d), I finished a normal job. elapsed:%.6f excuted: %lu, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nNormalCount, next);
 
 			me->nThreadStat = next;
 		} else {
 			me->nThreadStat = stat_run;
 			pthread_mutex_unlock(&hMutex);
+
+			me->nIdleCount++;
 
 			TRACE("workthread no(%d), I check idle process\n", me->nThreadNo);
 
@@ -430,8 +432,7 @@ int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal,
 	g_workThread_run = 1;	// 쓰레드 생성전에 설정해야한다. 값이 0이면 쓰레드 만들자 마자 종료한다
 
 	// 워크쓰레드 생성
-    int i;
-	for (i = 0; i < g_nThreadCount; i++) {
+	for (int i = 0; i < g_nThreadCount; i++) {
 		g_thread[i].nThreadNo = i;
 		g_thread[i].nThreadStat = stat_suspend;
 		g_thread[i].atp_realtime_func = realtime;
@@ -451,7 +452,7 @@ int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal,
 	return 0;
 }
 
-int atp_destroy(ATP_END endcode, bool use_exit_func, useconds_t endwaittime)
+int atp_destroy(ATP_END endcode, bool use_exit_func, time_t endwaittime)
 {
 	TRACE("=== %s() order: thread pool stop, atp_end code=%d\n", __func__, endcode);
 

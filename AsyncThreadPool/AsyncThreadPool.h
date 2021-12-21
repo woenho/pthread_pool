@@ -48,7 +48,7 @@ typedef enum { atp_realtime=0, atp_normal } ATP_PRIORITY;
 struct ATP_DATA_T; // ThreadFunction 선언시 사용할 수 있는 포인터만 선언..
 
 // 워크쓰레드가 호출할 사용자함수 형식
-typedef ATP_STAT(*ThreadFunction)(ATP_DATA_T*);
+typedef ATP_STAT(*ThreadFunction)(struct ATP_DATA_T*);
 
 // 워크쓰레드가 사용자함수를 호출할 때 인자로 넘겨주는 데이타형식, 사용자 함수에서 몇 번째 워크쓰레드에서 동작하는지 알 수 있게 쓰레드 번호 추가 
 typedef struct ATP_DATA_T { ThreadFunction func; ATP_PRIORITY priority; int threadNo, s_len; char s[]; } ATP_DATA, * PATP_DATA;
@@ -63,7 +63,7 @@ typedef struct _THREADINFO
 
 	ATP_STAT		nThreadStat;		// 쓰레드의 현재 상태 (워크쓰레드가 생성된 후 최초 상태는 stat_startup이다)
 	int				nExitCode;			// 쓰레드 종료시 종료코드
-	struct timespec waittime;			// 각 쓰레드 마다 스스로 깨어날 시간을 지정한다 (default 3초)
+	struct timespec waittime;			// 각 쓰레드 마다 스스로 깨어날 시간(default 3초)clock_gettime(CLOCK_REALTIME,&waittime)
 
 	// thread function
 	ThreadFunction	atp_realtime_func;	// 실시간 처리 요청을 수행할 함수
@@ -76,14 +76,15 @@ typedef struct _THREADINFO
 	PATP_DATA		atp_exit_data;		// 메인쓰레드가 설정한 상태가 상태가 stat_exit 인 경우 실행할 정보( 쓰레드 종료할 때 free()한다. atp_setfunc() 로 설정)
 
 	// 쓰레드 통계
-	struct timeval	beginWorktime;		// 마지막 수행한 잡의 수행 시작 시각
-	struct timeval	endWorktime;		// 마지막 수행한 잡의 수행 종료 시각
+	struct timespec	beginWorktime;		// 마지막 수행한 잡의 수행 시작 시각: clock_gettime(CLOCK_MONOTONIC,&beginWorktime)
+	struct timespec	endWorktime;		// 마지막 수행한 잡의 수행 종료 시각: clock_gettime(CLOCK_MONOTONIC,&endWorktime)
 	size_t			nRealtimeCount;		// 쓰레드가 realtime 요청을 실행한 건수
 	size_t			nNormalCount;		// 쓰레드가 normal 요청을 실행한 건수
+	size_t			nIdleCount;			// 쓰레드가 쉬고있다
 	size_t			sumRealtimeWorkingtime;	// realtime 수행 시간의 합 (milliseconds)
 	size_t			sumNormalWorkingtime;	// Normal 수행 시간의 합 (milliseconds)
-	suseconds_t		mostLongtimeRealtime;	// milliseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
-	suseconds_t		mostLongtimeNormal;	// milliseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
+	time_t			mostLongtimeRealtime;	// nanoseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
+	time_t			mostLongtimeNormal;	// nanoseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
 
 	// 외부연결이 필요한 경우 (예약)
 	bool			keepsession;		// tcp 경우 세션유지가 필요한가?
@@ -93,7 +94,7 @@ typedef struct _THREADINFO
 	int				sd;					// socket id (defualt value -1)
 
 	// log info (예약) 쓰레드가 동시에 로그를 날리면 섞여서 로그의 연속성을 분간하기 힘들다. 이때는 쓰레드 번호를 앞에 주어서 분간할 수 있다.. 생각..
-	struct timeval	logtime; // 마이트로초 or 밀리초를 사용하려면 필요
+	struct timespec	logtime; // 나노초 or 밀리초를 사용하려면 필요
 	struct tm		logtm;
 	char			szThreadLog[4096+24]; // 최대 로그길이 sizeof("YYYY-MM-DD HH:MM:SS.SSS ") = 24
 
@@ -110,7 +111,7 @@ inline PATP_DATA atp_alloc(size_t data_size) {
 
 // AsyncThreadPool 을 이용하는 기본적인 함수들
 int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal=NULL, pthread_attr_t* stAttr=NULL);
-int atp_destroy(ATP_END endcode, bool use_exit_func=false, useconds_t endwaittime=5000000U); // default wait 5 seconds
+int atp_destroy(ATP_END endcode, bool use_exit_func=false, time_t endwaittime=5e+9); // default wait 5 seconds
 	
 // atp_addQueue() 는 정상 작동하면 0 을 리턴한다. 큐를 추가하지 못했으면 -1 을 리턴한다
 int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority=atp_realtime);
