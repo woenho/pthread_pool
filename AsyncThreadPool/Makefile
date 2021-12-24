@@ -27,15 +27,18 @@ endif
 
 LFLAGS  = -lm -ldl -lpthread
 
-.PHONY: all clean debug release debugtrace
+.PHONY: all clean debug release debugtrace cversion
 
-all: $(LIBATP) example
+all: cversion $(LIBATP) example
 debug: all
 release: all
 debugtrace: all
 
 %.o: %.cpp
 	$(CXX) -o $@ $< -c $(CFLAGS)
+
+cversion:
+	echo `$(CXX) -v`
 
 $(LIBATP): $(OBJS)
 	ar cq $(LIBATP) $(OBJS)
