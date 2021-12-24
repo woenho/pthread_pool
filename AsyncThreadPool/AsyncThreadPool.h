@@ -83,8 +83,8 @@ typedef struct _THREADINFO
 	uint64_t		nIdleCount;			// 쓰레드가 쉬고있다
 	uint64_t		sumRealtimeWorkingtime;	// realtime 수행 시간의 합 (milliseconds)
 	uint64_t		sumNormalWorkingtime;	// Normal 수행 시간의 합 (milliseconds)
-	time_t			mostLongtimeRealtime;	// nanoseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
-	time_t			mostLongtimeNormal;	// nanoseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
+	uint64_t		mostLongtimeRealtime;	// nanoseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
+	uint64_t		mostLongtimeNormal;	// nanoseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
 
 	// 외부연결이 필요한 경우 (예약)
 	bool			keepsession;		// tcp 경우 세션유지가 필요한가?
@@ -111,7 +111,7 @@ inline PATP_DATA atp_alloc(size_t data_size) {
 
 // AsyncThreadPool 을 이용하는 기본적인 함수들
 int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal=NULL, pthread_attr_t* stAttr=NULL);
-int atp_destroy(ATP_END endcode, bool use_exit_func=false, time_t endwaittime=(time_t)5e+9); // default wait 5 seconds
+int atp_destroy(ATP_END endcode, bool use_exit_func = false, uint64_t endwaittime=5000000000); // default wait ‭4.294967295‬ seconds 최대값 32비트 os 호환을 위해
 	
 // atp_addQueue() 는 정상 작동하면 0 을 리턴한다. 큐를 추가하지 못했으면 -1 을 리턴한다
 int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority=atp_realtime);

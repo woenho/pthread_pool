@@ -19,7 +19,7 @@ pthread_cond_t	hEvent;			// 쓰레드 깨움 이벤트시그널
 static int g_mainThread_run = 0; // 0으로 설정하면 관리 쓰레드 종료한다
 static int g_workThread_run = 0; // 0으로 설정하면 work 쓰레드 종료한다
 static int g_mainThread_use_exit_func; // 1로 설정하면 모든 워크 쓰레드에 atp_exit_func 를 호출하고 종료하게 한다
-time_t g_endwaittime;	// 쓰레드풀 종료 시 작업하고있는 쓰레드를 기다릴 쵀대 시간을 지정한다
+uint64_t g_endwaittime;	// 쓰레드풀 종료 시 작업하고있는 쓰레드를 기다릴 쵀대 시간을 지정한다
 
 PTHREADINFO g_thread;		// 워크쓰레드관리 테이블 포인트
 static int g_nThreadCount;	// 워크쓰레드 수
@@ -33,7 +33,7 @@ PATP_DATA g_nextNormal = NULL; // 워크쓰레드가 깨어나서 할 일의 데
 
 unsigned int g_mutexWorkCount;
 
-time_t g_requestWorkDelay;	// 워크쓰레드에 작업의뢰를 한 후 실제 작업쓰레드가 작업을 시작까지 걸리는 시간 (자동계산)
+uint64_t g_requestWorkDelay;	// 워크쓰레드에 작업의뢰를 한 후 실제 작업쓰레드가 작업을 시작까지 걸리는 시간 (자동계산)
 struct timespec g_requestWorktime;	// 메인쓰레드가 작업의뢰시 설정하고 작업을 시작하는 워크 쓰레드가 이 시각과의 차이를 g_requestWorkDelay 에 반영한다(자동)
 
 // ------------ function -----------------
@@ -72,8 +72,8 @@ void* mainthread(void* param)
 	bool bRequested;
 	struct timespec timenow;
 	useconds_t waittime = 0;
-	time_t seconds = 0;
-	time_t nanoseconds = 0;
+	uint32_t seconds = 0;
+	uint64_t nanoseconds = 0;
 
 	g_requestWorkDelay = 0; // 최초 시작은 0으로
 	g_mainThread_use_exit_func = 0;
@@ -249,8 +249,8 @@ void* workthread(void* param)
 	int nStat;
 	struct timespec waittime;
 	struct timespec timenow;
-	time_t seconds = 0;
-	time_t nanoseconds = 0;
+	uint32_t seconds = 0;
+	uint64_t nanoseconds = 0;
 
 	while (g_workThread_run) {
 
@@ -367,7 +367,7 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size = %iu, normal = %iu)\n"
+			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size = %i, normal = %i)\n"
 				, me->nThreadNo, nanoseconds / 1e+9, g_queueRealtime.size(), g_queueNormal.size());
 
 			ATP_STAT next = stat_suspend;
@@ -451,7 +451,7 @@ int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal,
 	return 0;
 }
 
-int atp_destroy(ATP_END endcode, bool use_exit_func, time_t endwaittime)
+int atp_destroy(ATP_END endcode, bool use_exit_func, uint64_t endwaittime)
 {
 	TRACE("=== %s() order: thread pool stop, atp_end code=%d\n", __func__, endcode);
 
