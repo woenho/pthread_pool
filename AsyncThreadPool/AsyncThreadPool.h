@@ -78,11 +78,11 @@ typedef struct _THREADINFO
 	// 쓰레드 통계
 	struct timespec	beginWorktime;		// 마지막 수행한 잡의 수행 시작 시각: clock_gettime(CLOCK_MONOTONIC,&beginWorktime)
 	struct timespec	endWorktime;		// 마지막 수행한 잡의 수행 종료 시각: clock_gettime(CLOCK_MONOTONIC,&endWorktime)
-	size_t			nRealtimeCount;		// 쓰레드가 realtime 요청을 실행한 건수
-	size_t			nNormalCount;		// 쓰레드가 normal 요청을 실행한 건수
-	size_t			nIdleCount;			// 쓰레드가 쉬고있다
-	size_t			sumRealtimeWorkingtime;	// realtime 수행 시간의 합 (milliseconds)
-	size_t			sumNormalWorkingtime;	// Normal 수행 시간의 합 (milliseconds)
+	uint64_t		nRealtimeCount;		// 쓰레드가 realtime 요청을 실행한 건수
+	uint64_t		nNormalCount;		// 쓰레드가 normal 요청을 실행한 건수
+	uint64_t		nIdleCount;			// 쓰레드가 쉬고있다
+	uint64_t		sumRealtimeWorkingtime;	// realtime 수행 시간의 합 (milliseconds)
+	uint64_t		sumNormalWorkingtime;	// Normal 수행 시간의 합 (milliseconds)
 	time_t			mostLongtimeRealtime;	// nanoseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
 	time_t			mostLongtimeNormal;	// nanoseconds. 타스크 처리사간 중 가장 오래 걸린 사긴은?
 
@@ -111,7 +111,7 @@ inline PATP_DATA atp_alloc(size_t data_size) {
 
 // AsyncThreadPool 을 이용하는 기본적인 함수들
 int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal=NULL, pthread_attr_t* stAttr=NULL);
-int atp_destroy(ATP_END endcode, bool use_exit_func=false, time_t endwaittime=5e+9); // default wait 5 seconds
+int atp_destroy(ATP_END endcode, bool use_exit_func=false, time_t endwaittime=(time_t)5e+9); // default wait 5 seconds
 	
 // atp_addQueue() 는 정상 작동하면 0 을 리턴한다. 큐를 추가하지 못했으면 -1 을 리턴한다
 int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority=atp_realtime);
