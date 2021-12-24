@@ -111,7 +111,7 @@ inline PATP_DATA atp_alloc(size_t data_size) {
 
 // AsyncThreadPool 을 이용하는 기본적인 함수들
 int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal=NULL, pthread_attr_t* stAttr=NULL);
-int atp_destroy(ATP_END endcode, bool use_exit_func = false, uint64_t endwaittime=5000000000); // default wait ‭4.294967295‬ seconds 최대값 32비트 os 호환을 위해
+int atp_destroy(ATP_END endcode, bool use_exit_func = false, uint64_t endwaittime=5000000000); // default wait 5 econds.
 	
 // atp_addQueue() 는 정상 작동하면 0 을 리턴한다. 큐를 추가하지 못했으면 -1 을 리턴한다
 int atp_addQueue(PATP_DATA atp, ATP_PRIORITY priority=atp_realtime);
