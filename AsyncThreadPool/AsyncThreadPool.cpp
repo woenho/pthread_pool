@@ -292,6 +292,10 @@ void* workthread(void* param)
 #endif
 
 		if (me->nThreadStat == stat_exit) {
+			// atp_exit_func() 호출로 실행되는 마지막 작업도 종료대기시간 검증을 한다.
+			// 만일 작업중인 쓰레드로 종료 제한시간을 넘어버리면 강제 kill 되므로 이 루틴 타지 못한다.
+			clock_gettime(CLOCK_MONOTONIC, &me->beginWorktime); // NTP영향 받으면 안됨
+			
 			pthread_mutex_unlock(&hMutex);
 
 			// 명시적으로 죽으라는 메시지를 받았다.
