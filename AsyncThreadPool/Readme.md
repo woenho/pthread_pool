@@ -40,11 +40,11 @@ ExampleThreadPool.cpp 라는 예제 프로그램을 이용하여 라이브러리
 ./example 0 1: 쓰레즈 즉시 종료, 종료할 때 종료 사용자함수 처리하고 종료
 
 처리순서:
--> atp_create()로 쓰레드 풀 생성
-{	--반복--
--> atp_alloc()로 사용자함수에 넘겨줄 데이타 생성
--> atp_addQueue() 로 작업 의뢰
-}
+-> atp_create()로 쓰레드 풀 생성 
+	{	--반복--
+		-> atp_alloc()로 사용자함수에 넘겨줄 데이타 생성
+		-> atp_addQueue() 로 작업 의뢰
+	}
 -> atp_destroy() 로 쓰레드 종료
 
 함수 설명:
