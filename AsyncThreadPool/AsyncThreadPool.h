@@ -137,14 +137,14 @@ int atp_workunlock();	// 작업쓰레드간에 동기화를 위한 락이 필요
 unsigned int atp_getWorkLockCount();	// 작업쓰레드간에 동기화를 위한 락 대기열 숫자 조회
 
 // 통계
-inline size_t atp_getAverageRealtimeWorkingtime(int nThreadNo) {	// 평균 밀리초
+inline uint64_t atp_getAverageRealtimeWorkingtime(int nThreadNo) {	// 평균 밀리초
 	if (nThreadNo < 0 || nThreadNo >= atp_getThreadCount())
 		return -1;
 	PTHREADINFO info = atp_getThreadInfo();
 	return(info[nThreadNo].nRealtimeCount ? info[nThreadNo].sumRealtimeWorkingtime / info[nThreadNo].nRealtimeCount : 0);
 }
 
-inline size_t atp_getAverageNormalWorkingtime(int nThreadNo) {	// 평균 밀리초
+inline uint64_t atp_getAverageNormalWorkingtime(int nThreadNo) {	// 평균 밀리초
 	if (nThreadNo < 0 || nThreadNo >= atp_getThreadCount())
 		return -1;
 	PTHREADINFO info = atp_getThreadInfo();

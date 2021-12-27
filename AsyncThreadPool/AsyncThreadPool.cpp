@@ -371,11 +371,11 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-#if ( __WORDSIZE == 64 )
-			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%ju, normal=%ju)\n"
+#if ( __WORDSIZE == 32 )
+			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%u, normal=%u)\n"
 				, me->nThreadNo, nanoseconds / 1e+9, g_queueRealtime.size(), g_queueNormal.size());
 #else
-			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%u, normal=%u)\n"
+			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%ju, normal=%ju)\n"
 				, me->nThreadNo, nanoseconds / 1e+9, g_queueRealtime.size(), g_queueNormal.size());
 #endif
 			ATP_STAT next = stat_suspend;
