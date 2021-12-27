@@ -326,7 +326,7 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			TRACE("workthread no(%d), I got a realtime job. fetch delay:%.6f, excuted: %llu\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount);
+			TRACE("workthread no(%d), I got a realtime job. fetch delay:%.6f, excuted: %ju\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount);
 
 			ATP_STAT next = stat_suspend;
 
@@ -348,7 +348,7 @@ void* workthread(void* param)
 			if (me->mostLongtimeRealtime < nanoseconds)
 				me->mostLongtimeRealtime = nanoseconds;
 
-			TRACE("workthread no(%d), I finished a realtime job. elapsed:%.6f excuted: %llu, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount, next);
+			TRACE("workthread no(%d), I finished a realtime job. elapsed:%.6f excuted: %ju, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount, next);
 
 			me->nThreadStat = next;
 
@@ -367,9 +367,13 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size = %i, normal = %i)\n"
+#if ( __WORDSIZE == 64 )
+			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%ju, normal=%ju)\n"
 				, me->nThreadNo, nanoseconds / 1e+9, g_queueRealtime.size(), g_queueNormal.size());
-
+#else
+			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%u, normal=%u)\n"
+				, me->nThreadNo, nanoseconds / 1e+9, g_queueRealtime.size(), g_queueNormal.size());
+#endif
 			ATP_STAT next = stat_suspend;
 			if (me->atp_normal_data) {
 				me->atp_normal_data->priority = atp_normal;
@@ -389,7 +393,7 @@ void* workthread(void* param)
 			if (me->mostLongtimeNormal < nanoseconds)
 				me->mostLongtimeNormal = nanoseconds;
 
-			TRACE("workthread no(%d), I finished a normal job. elapsed:%.6f excuted: %llu, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nNormalCount, next);
+			TRACE("workthread no(%d), I finished a normal job. elapsed:%.6f excuted: %ju, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nNormalCount, next);
 
 			me->nThreadStat = next;
 		} else {
