@@ -269,7 +269,7 @@ void* workthread(void* param)
 		}
 
 
-		if (nStat==-1) {
+		if (nStat) {
 			pthread_mutex_unlock(&hMutex);
 			// wait 실패시 -1 설정, errno 로 오류 확인 필요
 			// EBUSY : 16	/* Device or resource busy */

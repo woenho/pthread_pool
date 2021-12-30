@@ -61,7 +61,7 @@ typedef struct _THREADINFO
 	pthread_t		threadID;			// 쓰레드 아이디
 	pthread_attr_t	stAttr;				// 쓰레드 속성
 
-	ATP_STAT		nThreadStat;		// 쓰레드의 현재 상태 (워크쓰레드가 생성된 후 최초 상태는 stat_startup이다)
+	ATP_STAT		nThreadStat;		// 쓰레드의 현재 상태
 	int				nExitCode;			// 쓰레드 종료시 종료코드
 	struct timespec waittime;			// 각 쓰레드 마다 스스로 깨어날 시간(default 3초)clock_gettime(CLOCK_REALTIME,&waittime)
 
@@ -153,6 +153,8 @@ inline uint64_t atp_getAverageNormalWorkingtime(int nThreadNo) {	// 평균 밀�
 
 // -------------------------------------------
 
+#ifndef _DEBUGTRACE_
+#define _DEBUGTRACE_
 #if defined(DEBUGTRACE)
 	#define TRACE(...) \
 	/* do while(0) 문은 블록이 없는 if문에서도 구문 없이 사용하기 위한 방법이다 */ \
@@ -178,5 +180,5 @@ inline uint64_t atp_getAverageNormalWorkingtime(int nThreadNo) {	// 평균 밀�
 #else
 	#define TRACE(...) 
 #endif
-
+#endif
 #endif	// end of #define (__AYNC_THREAD_POOL__)
