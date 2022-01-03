@@ -96,7 +96,7 @@ void* mainthread(void* param)
 						clock_gettime(CLOCK_MONOTONIC, &g_requestWorktime); // 작업의뢰시각 기록, NTP영향없다
 						pthread_cond_signal(&hEvent);
 						bRequested = true;
-						TRACE("mainthread. request a realtime job, avrage fetch delay:%.6f\n", g_requestWorkDelay / 1e+9);
+						TRACE("atp mainthread. request a realtime job, avrage fetch delay:%.6f\n", g_requestWorkDelay / 1e+9);
 					}
 				} else {
 					// 리얼타임 우선순위의 잡이 없다면
@@ -106,7 +106,7 @@ void* mainthread(void* param)
 						clock_gettime(CLOCK_MONOTONIC, &g_requestWorktime); // 작업의뢰시각 기록, NTP영향없다
 						pthread_cond_signal(&hEvent);
 						bRequested = true;
-						TRACE("mainthread. request a normal job, delay:%.6f\n", g_requestWorkDelay / 1e+9);
+						TRACE("atp mainthread. request a normal job, delay:%.6f\n", g_requestWorkDelay / 1e+9);
 					}
 				}
 				
@@ -120,7 +120,7 @@ void* mainthread(void* param)
 					clock_gettime(CLOCK_MONOTONIC, &timenow); // 작업의뢰지연시각구하기, NTP영향없다
 					seconds = timenow.tv_sec - g_requestWorktime.tv_sec;
 					nanoseconds = timenow.tv_nsec - g_requestWorktime.tv_nsec + (seconds * 1e+9);
-					TRACE("mainthread. monitoring requested a job, elapsed:%.6f\n", nanoseconds / 1e+9); // 워크쓰레드가 작업을 받아가는 시간이 평균시간 보다 더 오래 걸리고 있는 상황
+					TRACE("atp mainthread. monitoring requested a job, elapsed:%.6f\n", nanoseconds / 1e+9); // 워크쓰레드가 작업을 받아가는 시간이 평균시간 보다 더 오래 걸리고 있는 상황
 				}
 				pthread_mutex_unlock(&hMutex);
 			}
@@ -138,7 +138,7 @@ void* mainthread(void* param)
 
 	if (g_mainThread_use_exit_func) {
 		// 종료할 때 워크쓰레드 사용자함수를 호출 후 종료하라고 요청을 받았다면
-		TRACE("=== set exit signal to all work threads\n");
+		TRACE("atp === set exit signal to all work threads\n");
 		do {
 			usleep(500000); // 0.5 second 
 			nanoseconds += 5e+8;
@@ -150,7 +150,7 @@ void* mainthread(void* param)
 					for (i = 0; i < g_nThreadCount; i++) {
 						if (g_thread[i].nThreadStat < stat_run) {
 							g_thread[i].nThreadStat = stat_exit;
-							TRACE("=== thread no(%d), set to stat_exit signal\n", g_thread[i].nThreadNo);
+							TRACE("atp === thread no(%d), set to stat_exit signal\n", g_thread[i].nThreadNo);
 						}
 						else if (g_thread[i].nThreadStat >= stat_exited) {
 							// 종료한 작업 카운트
@@ -169,7 +169,7 @@ void* mainthread(void* param)
 	} else {
 		// 각 워크쓰레드 종료함수 호출 필요없는 경우
 		// 실행유지플래그(g_workThread_run)를 끄고 일제히 깨운다
-		TRACE("=== all thread broadcast terminate signal !\n");
+		TRACE("atp === all thread broadcast terminate signal !\n");
 		g_workThread_run = 0;
 		pthread_cond_broadcast(&hEvent);
 	}
@@ -178,7 +178,7 @@ void* mainthread(void* param)
 	bzero(szThreadStatus, g_nThreadCount);
 
 	// 모든 워크쓰레드가 정상종료 되었는지 검증한다, 최대 g_endwaittime 만큼 기다린다
-	TRACE("=== check exited all work threads endwait seconds(%.6f)\n", g_endwaittime / 1e+9);
+	TRACE("atp === check exited all work threads endwait seconds(%.6f)\n", g_endwaittime / 1e+9);
 
 	do
 	{
@@ -197,11 +197,11 @@ void* mainthread(void* param)
 					seconds = timenow.tv_sec - g_thread[i].beginWorktime.tv_sec;
 					nanoseconds = timenow.tv_nsec - g_thread[i].beginWorktime.tv_nsec + (seconds * 1e+9);
 					if (nanoseconds >= g_endwaittime) {
-						TRACE("=== thread no(%d), need force exit check %.6f / %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
+						TRACE("atp === thread no(%d), need force exit check %.6f / %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
 						szThreadStatus[i] = '9';
 						nCheckExit++;
 					} else {
-						TRACE("=== thread no(%d), elapsed time %.6f seconds, waittime %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
+						TRACE("atp === thread no(%d), elapsed time %.6f seconds, waittime %.6f\n", g_thread[i].nThreadNo, nanoseconds / 1e+9, g_endwaittime / 1e+9);
 					}
 				}
 			}
@@ -210,16 +210,16 @@ void* mainthread(void* param)
 	
 	free(szThreadStatus);
 
-	TRACE("=== force kill. if still running thread\n");
+	TRACE("atp === force kill. if still running thread\n");
 	// 기다려도 종료하지 않은 쓰레드는 강제 종료 시킨다
 	for (i = 0; i < g_nThreadCount; i++) {
 		if (g_thread[i].nThreadStat == stat_exited) {
-			TRACE("=== thread no(%d), exited check ok!\n", g_thread[i].nThreadNo);
+			TRACE("atp === thread no(%d), exited check ok!\n", g_thread[i].nThreadNo);
 		} else {
 			clock_gettime(CLOCK_MONOTONIC, &timenow);
 			seconds = timenow.tv_sec - g_thread[i].beginWorktime.tv_sec;
 			nanoseconds = timenow.tv_nsec - g_thread[i].beginWorktime.tv_nsec + (seconds * 1e+9);
-			TRACE("=== thread no(%d), still running. force kill. run time(%.6f second)\n", g_thread[i].nThreadNo, nanoseconds / 1e+9);
+			TRACE("atp === thread no(%d), still running. force kill. run time(%.6f second)\n", g_thread[i].nThreadNo, nanoseconds / 1e+9);
 			pthread_cancel(g_thread[i].threadID);
 		}
 	}
@@ -289,7 +289,7 @@ void* workthread(void* param)
 		}
 
 #if 0
-		TRACE("workthread no(%d), getup or wakeup... status(%d, %d)\n", me->nThreadNo, me->nThreadStat, errno);
+		TRACE("atp workthread no(%d), getup or wakeup... status(%d, %d)\n", me->nThreadNo, me->nThreadStat, errno);
 #endif
 
 		if (me->nThreadStat == stat_exit) {
@@ -300,7 +300,7 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex);
 
 			// 명시적으로 죽으라는 메시지를 받았다.
-			TRACE("workthread no(%d), my signal is stat_exit\n", me->nThreadNo);
+			TRACE("atp workthread no(%d), my signal is stat_exit\n", me->nThreadNo);
 
 			if (me->atp_exit_func)
 				me->nExitCode = me->atp_exit_func(me->atp_exit_data);
@@ -309,7 +309,7 @@ void* workthread(void* param)
 
 			me->nThreadStat = stat_exited;
 			
-			TRACE("workthread no(%d), I'm going to exiting\n", me->nThreadNo);
+			TRACE("atp workthread no(%d), I'm going to exiting\n", me->nThreadNo);
 			
 			break; /// exit from work loop
 
@@ -331,7 +331,7 @@ void* workthread(void* param)
 			pthread_mutex_unlock(&hMutex); // 데이타포인트 작업 완료 후에 뮤텍스락을 푼다
 
 			// 실행명령 전달받음
-			TRACE("workthread no(%d), I got a realtime job. fetch delay:%.6f, excuted: %ju\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount);
+			TRACE("atp workthread no(%d), I got a realtime job. fetch delay:%.6f, excuted: %ju\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount);
 
 			ATP_STAT next = stat_suspend;
 
@@ -353,7 +353,7 @@ void* workthread(void* param)
 			if (me->mostLongtimeRealtime < nanoseconds)
 				me->mostLongtimeRealtime = nanoseconds;
 
-			TRACE("workthread no(%d), I finished a realtime job. elapsed:%.6f excuted: %ju, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount, next);
+			TRACE("atp workthread no(%d), I finished a realtime job. elapsed:%.6f excuted: %ju, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nRealtimeCount, next);
 
 			me->nThreadStat = next;
 
@@ -373,10 +373,10 @@ void* workthread(void* param)
 
 			// 실행명령 전달받음
 #if ( __WORDSIZE == 32 )
-			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%u, normal=%u)\n"
+			TRACE("atp workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%u, normal=%u)\n"
 				, me->nThreadNo, nanoseconds / 1e+9, g_queueRealtime.size(), g_queueNormal.size());
 #else
-			TRACE("workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%ju, normal=%ju)\n"
+			TRACE("atp workthread no(%d), I got a normal job. fetch delay:%.6f, (real queue size=%ju, normal=%ju)\n"
 				, me->nThreadNo, nanoseconds / 1e+9, g_queueRealtime.size(), g_queueNormal.size());
 #endif
 			ATP_STAT next = stat_suspend;
@@ -398,7 +398,7 @@ void* workthread(void* param)
 			if (me->mostLongtimeNormal < nanoseconds)
 				me->mostLongtimeNormal = nanoseconds;
 
-			TRACE("workthread no(%d), I finished a normal job. elapsed:%.6f excuted: %ju, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nNormalCount, next);
+			TRACE("atp workthread no(%d), I finished a normal job. elapsed:%.6f excuted: %ju, next: %d\n", me->nThreadNo, nanoseconds / 1e+9, me->nNormalCount, next);
 
 			me->nThreadStat = next;
 		} else {
@@ -411,9 +411,9 @@ void* workthread(void* param)
 
 			ATP_STAT next = stat_suspend;
 			if (me->atp_idle_func) {
-				TRACE("workthread no(%d), I start idle job\n", me->nThreadNo);
+				TRACE("atp workthread no(%d), I start idle job\n", me->nThreadNo);
 				next = me->atp_idle_func(me->atp_idle_data);
-				TRACE("workthread no(%d), I finished a idle job. next =%d\n", me->nThreadNo, next);
+				TRACE("atp workthread no(%d), I finished a idle job. next =%d\n", me->nThreadNo, next);
 			}
 			me->nThreadStat = next;
 
@@ -422,7 +422,7 @@ void* workthread(void* param)
 
 	// 워크쓰레드 명시적 종료
 	me->nThreadStat = stat_exited;
-	TRACE("workthread no(%d), terminated\n", me->nThreadNo);
+	TRACE("atp workthread no(%d), terminated\n", me->nThreadNo);
 	pthread_exit(0);
 }
 
