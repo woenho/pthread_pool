@@ -269,17 +269,18 @@ void* workthread(void* param)
 		}
 
 
-		if (nStat) {
+		if (nStat && nStat != ETIMEDOUT) {
 			pthread_mutex_unlock(&hMutex);
 			// wait 실패시 -1 설정, errno 로 오류 확인 필요
 			// EBUSY : 16	/* Device or resource busy */
-			if (errno == EBUSY)
-			{
-				TRACE("workthread no(%d), timedwait() EBUSY, errno=%d\n", me->nThreadNo, errno);
+			if (errno == EBUSY) {
+				TRACE("atp workthread no(%d), timedwait() EBUSY, errno=%d\n", me->nThreadNo, errno);
 			} else if (errno == EINVAL) {
-				TRACE("workthread no(%d), timedwait() EINVAL, errno=%d\n", me->nThreadNo, errno);
+				TRACE("atp workthread no(%d), timedwait() EINVAL, errno=%d\n", me->nThreadNo, errno);
+			} else if (nStat == ETIMEDOUT) {
+				TRACE("atp workthread no(%d), timedwait() ETIMEDOUT, errno=%d\n", me->nThreadNo, errno);
 			} else {
-				TRACE("workthread no(%d), timedwait() error, errno=%d\n", me->nThreadNo, errno);
+				TRACE("atp workthread no(%d), timedwait() error, errno=%d\n", me->nThreadNo, errno);
 				usleep(10000);// 10,000 마이크로초 => 10밀리초 => // 마이크로초 (백만분의1초 10의 -6승)
 			}
 
@@ -406,7 +407,7 @@ void* workthread(void* param)
 
 			me->nIdleCount++;
 
-			TRACE("workthread no(%d), I check idle process\n", me->nThreadNo);
+			// TRACE("workthread no(%d), I check idle process\n", me->nThreadNo);
 
 			ATP_STAT next = stat_suspend;
 			if (me->atp_idle_func) {
