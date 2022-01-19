@@ -1,6 +1,22 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="DebugTrace|ARM">
+      <Configuration>DebugTrace</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugTrace|ARM64">
+      <Configuration>DebugTrace</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugTrace|x64">
+      <Configuration>DebugTrace</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="DebugTrace|x86">
+      <Configuration>DebugTrace</Configuration>
+      <Platform>x86</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|ARM">
       <Configuration>Debug</Configuration>
       <Platform>ARM</Platform>
@@ -49,6 +65,10 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <ConfigurationType>Makefile</ConfigurationType>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugTrace|ARM'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <ConfigurationType>Makefile</ConfigurationType>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'" Label="Configuration">
     <UseDebugLibraries>false</UseDebugLibraries>
     <ConfigurationType>Makefile</ConfigurationType>
@@ -57,11 +77,19 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <ConfigurationType>Makefile</ConfigurationType>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugTrace|x86'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <ConfigurationType>Makefile</ConfigurationType>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'" Label="Configuration">
     <UseDebugLibraries>false</UseDebugLibraries>
     <ConfigurationType>Makefile</ConfigurationType>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <ConfigurationType>Makefile</ConfigurationType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugTrace|x64'" Label="Configuration">
     <UseDebugLibraries>true</UseDebugLibraries>
     <ConfigurationType>Makefile</ConfigurationType>
   </PropertyGroup>
@@ -77,57 +105,85 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <ConfigurationType>Makefile</ConfigurationType>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugTrace|ARM64'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <ConfigurationType>Makefile</ConfigurationType>
+  </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings" />
   <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
+    <RemoteBuildCommandLine>make clean debug</RemoteBuildCommandLine>
+    <RemoteReBuildCommandLine>make clean debug</RemoteReBuildCommandLine>
+    <RemoteCleanCommandLine>make debug clean</RemoteCleanCommandLine>
+    <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugTrace|ARM'">
     <RemoteBuildCommandLine>make clean debugtrace</RemoteBuildCommandLine>
     <RemoteReBuildCommandLine>make clean debugtrace</RemoteReBuildCommandLine>
-    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <RemoteCleanCommandLine>make debugtrace clean</RemoteCleanCommandLine>
     <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM'">
-    <RemoteBuildCommandLine>make clean debugtrace</RemoteBuildCommandLine>
-    <RemoteReBuildCommandLine>make clean debugtrace</RemoteReBuildCommandLine>
-    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <RemoteBuildCommandLine>make clean release</RemoteBuildCommandLine>
+    <RemoteReBuildCommandLine>make clean release</RemoteReBuildCommandLine>
+    <RemoteCleanCommandLine>make release clean</RemoteCleanCommandLine>
     <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <RemoteBuildCommandLine>make clean debug</RemoteBuildCommandLine>
+    <RemoteReBuildCommandLine>make clean debug</RemoteReBuildCommandLine>
+    <RemoteCleanCommandLine>make debug clean</RemoteCleanCommandLine>
+    <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugTrace|ARM64'">
     <RemoteBuildCommandLine>make clean debugtrace</RemoteBuildCommandLine>
     <RemoteReBuildCommandLine>make clean debugtrace</RemoteReBuildCommandLine>
-    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <RemoteCleanCommandLine>make debugtrace clean</RemoteCleanCommandLine>
     <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
-    <RemoteBuildCommandLine>make clean debugtrace</RemoteBuildCommandLine>
-    <RemoteReBuildCommandLine>make clean debugtrace</RemoteReBuildCommandLine>
-    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <RemoteBuildCommandLine>make clean release</RemoteBuildCommandLine>
+    <RemoteReBuildCommandLine>make clean release</RemoteReBuildCommandLine>
+    <RemoteCleanCommandLine>make release clean</RemoteCleanCommandLine>
     <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <RemoteBuildCommandLine>make clean debug</RemoteBuildCommandLine>
+    <RemoteReBuildCommandLine>make clean debug</RemoteReBuildCommandLine>
+    <RemoteCleanCommandLine>make debug clean</RemoteCleanCommandLine>
+    <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugTrace|x64'">
     <RemoteBuildCommandLine>make clean debugtrace</RemoteBuildCommandLine>
     <RemoteReBuildCommandLine>make clean debugtrace</RemoteReBuildCommandLine>
-    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <RemoteCleanCommandLine>make debugtrace clean</RemoteCleanCommandLine>
     <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <RemoteBuildCommandLine>make clean debugtrace</RemoteBuildCommandLine>
-    <RemoteReBuildCommandLine>make clean debugtrace</RemoteReBuildCommandLine>
-    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <RemoteBuildCommandLine>make clean release</RemoteBuildCommandLine>
+    <RemoteReBuildCommandLine>make clean release</RemoteReBuildCommandLine>
+    <RemoteCleanCommandLine>make release clean</RemoteCleanCommandLine>
     <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
+    <RemoteBuildCommandLine>make clean debug</RemoteBuildCommandLine>
+    <RemoteReBuildCommandLine>make clean debug</RemoteReBuildCommandLine>
+    <RemoteCleanCommandLine>make debug clean</RemoteCleanCommandLine>
+    <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='DebugTrace|x86'">
     <RemoteBuildCommandLine>make clean debugtrace</RemoteBuildCommandLine>
     <RemoteReBuildCommandLine>make clean debugtrace</RemoteReBuildCommandLine>
-    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <RemoteCleanCommandLine>make debugtrace clean</RemoteCleanCommandLine>
     <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'">
-    <RemoteBuildCommandLine>make clean debugtrace</RemoteBuildCommandLine>
-    <RemoteReBuildCommandLine>make clean debugtrace</RemoteReBuildCommandLine>
-    <RemoteCleanCommandLine>make clean</RemoteCleanCommandLine>
+    <RemoteBuildCommandLine>make clean release</RemoteBuildCommandLine>
+    <RemoteReBuildCommandLine>make clean release</RemoteReBuildCommandLine>
+    <RemoteCleanCommandLine>make release clean</RemoteCleanCommandLine>
     <NMakePreprocessorDefinitions>DEBUG;DEBUGTRACE</NMakePreprocessorDefinitions>
   </PropertyGroup>
   <ItemGroup>

@@ -23,6 +23,7 @@ else
 	LIBATP = libAsyncThreadPool_d.a
 ifeq (debugtrace, $(findstring debugtrace, $(MAKECMDGOALS))) #"make clean debugtrace"으로 clean 다음에 연이어 debugtrace 나올 수가 있다.
 	CFLAGS += -DDEBUGTRACE
+	LIBATP = libAsyncThreadPool_t.a
 endif
 endif
 
