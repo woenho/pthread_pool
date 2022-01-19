@@ -38,6 +38,8 @@
 #include <queue>
 #include <fstream>
 
+extern char atpCompileDate[20];
+
 // 쓰레드풀의 종료 옵션
 typedef enum {force=0,gracefully} ATP_END;
 // 워크 쓰레드의 현재 상태
@@ -93,10 +95,12 @@ typedef struct _THREADINFO
 	unsigned short	port;
 	int				sd;					// socket id (defualt value -1)
 
+#if defined(THREAD_LOG_CONFIG)
 	// log info (예약) 쓰레드가 동시에 로그를 날리면 섞여서 로그의 연속성을 분간하기 힘들다. 이때는 쓰레드 번호를 앞에 주어서 분간할 수 있다.. 생각..
 	struct timespec	logtime; // 나노초 or 밀리초를 사용하려면 필요
 	struct tm		logtm;
 	char			szThreadLog[4096+24]; // 최대 로그길이 sizeof("YYYY-MM-DD HH:MM:SS.SSS ") = 24
+#endif
 
 } THREADINFO, *PTHREADINFO;
 

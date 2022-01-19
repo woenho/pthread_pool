@@ -6,7 +6,7 @@
 CXX=g++
 
 LIBATP = libAsyncThreadPool.a
-SRCS = AsyncThreadPool.cpp 
+SRCS = AsyncThreadPool.cpp atpversion.cpp
 OBJS = $(SRCS:.cpp=.o)
 
 CFLAGS_RELEASE = -O2 -fPIC
@@ -26,9 +26,11 @@ ifeq (debugtrace, $(findstring debugtrace, $(MAKECMDGOALS))) #"make clean debugt
 endif
 endif
 
+DATE = $(shell date +'char atpCompileDate[20] = "%Y-%m-%d %H:%M:%S";')
+
 .PHONY: all clean debug release debugtrace cversion
 
-all: cversion $(LIBATP) example
+all: version $(LIBATP) example
 debug: all
 release: all
 debugtrace: all
@@ -36,7 +38,8 @@ debugtrace: all
 %.o: %.cpp
 	$(CXX) -o $@ $< -c $(CFLAGS)
 
-cversion:
+version:
+	echo '$(DATE)' > atpversion.cpp
 	echo `$(CXX) -v`
 
 $(LIBATP): $(OBJS)
