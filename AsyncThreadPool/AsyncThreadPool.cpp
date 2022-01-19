@@ -429,7 +429,7 @@ void* workthread(void* param)
 
 int atp_create(int nThreadCount, ThreadFunction realtime, ThreadFunction normal, pthread_attr_t* stAttr)
 {
-	fprintf(stdout, "atp compile date : %s", atpCompileDate);
+	fprintf(stdout, "atp compile date : %s\n", atpCompileDate);
 	fflush(stdout);
 	syslog(LOG_INFO, "atp compile date : %s", atpCompileDate);
 
